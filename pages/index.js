@@ -1,6 +1,7 @@
 // pages/index.js
 import { useState } from 'react';
 import { useRouter } from 'next/router';
+import { Analytics } from "@vercel/analytics/next"
 
 export default function Home() {
   const [user1, setUser1] = useState('');
@@ -37,6 +38,7 @@ export default function Home() {
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8 fade-in-up">
+            <Analytics />
           <div className="mb-4">
             <h1 className="text-4xl font-bold gradient-text mb-2">
               Last.fm Music Matcher
