@@ -1,5 +1,5 @@
 // pages/api/compare.js
-import { getUserData, getArtistInfo, LastFMError } from '../../utils/lastfm';
+import { getUserData, getArtistInfo, LastFMError } from '../../utils/lastfm.js';
 import {
   calculateArtistOverlap,
   calculateTrackOverlap,
@@ -7,7 +7,57 @@ import {
   calculateOverallCompatibility,
   extractGenresFromTags,
   calculateGenreOverlap
-} from '../../utils/overlap';
+} from '../../utils/overlap.js';
+import { withCache } from '../../utils/cache.js';
+
+// Cache the entire comparison result for faster subsequent requests
+const getCachedComparison = withCache(async (user1, user2, period) => {
+  // Fetch data for both users
+  const [user1Data, user2Data] = await Promise.all([
+    getUserData(user1, period),
+    getUserData(user2, period)
+  ]);
+
+  // Enrich artists with tags for genre extraction
+  const [user1ArtistsWithTags, user2ArtistsWithTags] = await Promise.all([
+    enrichArtistsWithTags(user1Data.topArtists),
+    enrichArtistsWithTags(user2Data.topArtists)
+  ]);
+
+  // Calculate overlaps
+  const artistOverlap = calculateArtistOverlap(
+    user1Data.topArtists,
+    user2Data.topArtists
+  );
+
+  const trackOverlap = calculateTrackOverlap(
+    user1Data.topTracks,
+    user2Data.topTracks
+  );
+
+  // Extract genres from enriched artist data
+  const user1Genres = extractGenresFromTags(user1ArtistsWithTags);
+  const user2Genres = extractGenresFromTags(user2ArtistsWithTags);
+  const genreOverlap = calculateGenreOverlap(user1Genres, user2Genres);
+
+  // Generate recommendations
+  const recommendations = generateRecommendations(user1Data, user2Data, 10);
+
+  // Calculate overall compatibility
+  const compatibility = calculateOverallCompatibility(artistOverlap, trackOverlap);
+
+  return {
+    user1Data,
+    user2Data,
+    user1Genres,
+    user2Genres,
+    artistOverlap,
+    trackOverlap,
+    genreOverlap,
+    recommendations,
+    compatibility
+  };
+}, 'fullComparison', 600); // 10 minutes cache for full comparisons
 
 // Helper function to enrich artists with tags
 async function enrichArtistsWithTags(artists, maxArtists = 30) {
@@ -41,6 +91,9 @@ async function enrichArtistsWithTags(artists, maxArtists = 30) {
 }
 
 export default async function handler(req, res) {
+  // Add cache headers
+  res.setHeader('Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -60,67 +113,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Fetch data for both users
-    const [user1Data, user2Data] = await Promise.all([
-      getUserData(user1, period),
-      getUserData(user2, period)
-    ]);
+    console.log(`Starting comparison for ${user1} vs ${user2} (${period})`);
+    const startTime = Date.now();
 
-    // Enrich artists with tags for genre extraction
-    const [user1ArtistsWithTags, user2ArtistsWithTags] = await Promise.all([
-      enrichArtistsWithTags(user1Data.topArtists),
-      enrichArtistsWithTags(user2Data.topArtists)
-    ]);
+    // Use cached comparison function
+    const comparisonResults = await getCachedComparison(user1, user2, period);
 
-    // Calculate overlaps
-    const artistOverlap = calculateArtistOverlap(
-      user1Data.topArtists,
-      user2Data.topArtists
-    );
-
-    const trackOverlap = calculateTrackOverlap(
-      user1Data.topTracks,
-      user2Data.topTracks
-    );
-
-    // Extract genres from enriched artist data
-    const user1Genres = extractGenresFromTags(user1ArtistsWithTags);
-    const user2Genres = extractGenresFromTags(user2ArtistsWithTags);
-    const genreOverlap = calculateGenreOverlap(user1Genres, user2Genres);
-
-    // Generate recommendations
-    const recommendations = generateRecommendations(user1Data, user2Data, 10);
-
-    // Calculate overall compatibility
-    const compatibility = calculateOverallCompatibility(artistOverlap, trackOverlap);
-
-    // Prepare word cloud data
-    const wordCloudData = {
-      artists: [
-        ...user1Data.topArtists.slice(0, 30).map(artist => ({
-          text: artist.name,
-          value: parseInt(artist.playcount) || 0,
-          user: user1
-        })),
-        ...user2Data.topArtists.slice(0, 30).map(artist => ({
-          text: artist.name,
-          value: parseInt(artist.playcount) || 0,
-          user: user2
-        }))
-      ].sort((a, b) => b.value - a.value).slice(0, 40),
-      genres: [
-        ...user1Genres.slice(0, 20).map(genre => ({
-          text: genre.name,
-          value: genre.count,
-          user: user1
-        })),
-        ...user2Genres.slice(0, 20).map(genre => ({
-          text: genre.name,
-          value: genre.count,
-          user: user2
-        }))
-      ].sort((a, b) => b.value - a.value).slice(0, 30)
-    };
+    const {
+      user1Data,
+      user2Data,
+      user1Genres,
+      user2Genres,
+      artistOverlap,
+      trackOverlap,
+      genreOverlap,
+      recommendations,
+      compatibility
+    } = comparisonResults;
 
     // Prepare response
     const comparisonData = {
@@ -166,10 +175,13 @@ export default async function handler(req, res) {
       },
       metadata: {
         comparedAt: new Date().toISOString(),
-        apiVersion: '1.1'
+        apiVersion: '1.2',
+        processingTime: Date.now() - startTime,
+        cached: true // This will be true for subsequent requests
       }
     };
 
+    console.log(`Comparison completed in ${Date.now() - startTime}ms`);
     res.status(200).json(comparisonData);
 
   } catch (error) {
