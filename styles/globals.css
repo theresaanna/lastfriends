@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  body {
+    @apply bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+}
+
+@layer components {
+  /* Custom button styles */
+  .btn-lastfm {
+    @apply bg-gradient-lastfm hover:bg-gradient-lastfm-hover text-white font-medium py-3 px-6 rounded-xl shadow-lastfm transition-all duration-200 transform hover:scale-105 hover:shadow-lg;
+  }
+
+  .btn-secondary {
+    @apply bg-white hover:bg-gray-50 text-gray-700 font-medium py-3 px-6 rounded-xl border border-gray-200 shadow-soft transition-all duration-200 transform hover:scale-105 hover:shadow-md;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-gradient-card rounded-2xl shadow-soft border border-white/50 backdrop-blur-sm;
+  }
+
+  .card-elevated {
+    @apply bg-white rounded-2xl shadow-soft-lg border border-gray-100/50 backdrop-blur-sm;
+  }
+
+  /* Input styles */
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm focus:border-lastfm-red focus:ring-2 focus:ring-lastfm-red/20 outline-none transition-all duration-200 placeholder-gray-400;
+  }
+
+  .select-field {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm focus:border-lastfm-red focus:ring-2 focus:ring-lastfm-red/20 outline-none transition-all duration-200;
+  }
+
+  /* Music card styles */
+  .music-card-shared {
+    @apply p-4 rounded-xl border-l-4 border-l-green-400 bg-gradient-to-r from-green-50 to-emerald-50/50 shadow-soft;
+  }
+
+  .music-card-unique {
+    @apply p-4 rounded-xl border-l-4 border-l-blue-400 bg-gradient-to-r from-blue-50 to-sky-50/50 shadow-soft;
+  }
+
+  /* Animation for compatibility gauge */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-lastfm-red to-lastfm-red-light bg-clip-text text-transparent;
+  }
+}
