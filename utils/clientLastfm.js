@@ -118,7 +118,7 @@ export async function getUserData(username, period = 'overall') {
     const [userInfo, topArtists, topTracks, topAlbums] = await Promise.all([
       getUserInfo(username),
       getUserTopArtists(username, period, 100),
-      getUserTopTracks(username, period, 100),
+      getUserTopTracks(username, period, 1000),
       getUserTopAlbums(username, period, 50)
     ]);
 
