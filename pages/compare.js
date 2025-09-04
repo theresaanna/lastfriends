@@ -687,6 +687,14 @@ export default function ComparePage() {
               📋 Copy Link to Share
             </button>
           </div>
+            <footer className="mt-6">
+                <p className="text-sm text-red-800">
+                Made by <a href="https://last.fm/user/superexciting">Theresa</a>.
+            </p>
+            <p className="text-sm text-gray-500">
+                Open Source on <a href="https://github.com/theresaanna/lastfriends">Github: theresaanna/lastfriends</a>
+            </p>
+            </footer>
         </div>
       </div>
     </div>

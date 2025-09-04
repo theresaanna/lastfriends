@@ -144,9 +144,15 @@ export default function Home() {
           <p className="text-sm text-gray-500">
             <strong>Note:</strong> Both users must have public Last.fm profiles
           </p>
-          <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400">
             Analyzes top artists and tracks to find compatibility and shared favorites
           </p>
+            <p className="text-sm text-red-800">
+                Made by <a href="https://last.fm/user/superexciting">Theresa</a>.
+            </p>
+            <p className="text-sm text-gray-500">
+                Open Source on <a href="https://github.com/theresaanna/lastfriends">Github: theresaanna/lastfriends</a>
+            </p>
         </div>
       </div>
     </div>
