@@ -1,4 +1,4 @@
-// utils/lastfm.js
+// utils/lastfm.js - Server-side Last.fm API calls
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
 const LASTFM_BASE_URL = 'http://ws.audioscrobbler.com/2.0/';
 
@@ -118,6 +118,18 @@ export async function getUserTopAlbums(username, period = 'overall', limit = 50)
     limit: limit.toString()
   });
   return data.topalbums?.album || [];
+}
+
+// New function to get artist info with tags
+export async function getArtistInfo(artistName, mbid = null) {
+  try {
+    const params = mbid ? { mbid } : { artist: artistName };
+    const data = await makeLastFMRequest('artist.getinfo', params);
+    return data.artist;
+  } catch (error) {
+    console.warn(`Failed to get artist info for ${artistName}:`, error.message);
+    return null;
+  }
 }
 
 export async function getUserData(username, period = 'overall') {

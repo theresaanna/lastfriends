@@ -50,6 +50,105 @@
     @apply p-4 rounded-xl border-l-4 border-l-blue-400 bg-gradient-to-r from-blue-50 to-sky-50/50 shadow-soft;
   }
 
+  /* Word Cloud Styles */
+  .wordcloud-container {
+    @apply w-full h-96 flex justify-center items-center bg-white border border-gray-200 rounded-xl mb-5;
+  }
+
+  .wordcloud-svg {
+    @apply w-full h-full overflow-visible;
+  }
+
+  .wordcloud-text {
+    @apply cursor-pointer transition-opacity duration-200;
+  }
+
+  .wordcloud-text:hover {
+    @apply opacity-70;
+  }
+
+  /* Loading Styles */
+  .loading {
+    @apply flex items-center justify-center h-96 text-gray-500;
+  }
+
+  .spinner {
+    @apply w-6 h-6 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin mr-2;
+  }
+
+  /* Toggle Switch Styles - More specific to avoid conflicts */
+  .toggle-switch {
+    @apply relative inline-block w-48 h-10 bg-gray-200 rounded-full overflow-hidden shadow-inner cursor-pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .toggle-switch .toggle-option {
+    @apply absolute w-1/2 h-full flex items-center justify-center text-sm font-medium cursor-pointer transition-colors duration-300 z-10;
+    color: #6b7280 !important; /* Force override any word cloud styles */
+    font-weight: 500 !important;
+    font-size: 14px !important;
+  }
+
+  .toggle-switch .toggle-option:first-child {
+    @apply left-0;
+  }
+
+  .toggle-switch .toggle-option:last-child {
+    @apply right-0;
+  }
+
+  .toggle-switch .toggle-slider {
+    @apply absolute top-0.5 left-0.5 w-1/2 h-4/5 bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-transform duration-300 shadow-md;
+    transform: translateX(0);
+  }
+
+  .toggle-switch.genres .toggle-slider {
+    transform: translateX(100%);
+  }
+
+  .toggle-switch .toggle-option.active {
+    color: white !important;
+    font-weight: 600 !important;
+  }
+
+  /* Genre Card Styles */
+  .genre-card {
+    @apply bg-white rounded-xl p-6 shadow-soft border border-gray-100;
+  }
+
+  .genre-card h3 {
+    @apply text-red-500 mb-5 text-lg font-semibold flex items-center gap-2;
+  }
+
+  .user-avatar {
+    @apply w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-semibold;
+  }
+
+  .genre-list {
+    @apply list-none space-y-0;
+  }
+
+  .genre-item {
+    @apply px-3 py-2 mb-1.5 rounded-md bg-gray-50 flex justify-between items-center transition-all duration-200;
+  }
+
+  .genre-item.overlap {
+    @apply bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500 font-medium transform translate-x-0.5;
+  }
+
+  .genre-item.overlap::after {
+    content: "★";
+    @apply text-red-500 text-sm ml-2;
+  }
+
+  .genre-count {
+    @apply text-xs text-gray-500 bg-gray-200 px-2 py-1 rounded-full font-medium;
+  }
+
+  .genre-item.overlap .genre-count {
+    @apply bg-red-500 text-white;
+  }
+
   /* Animation for compatibility gauge */
   @keyframes fadeInUp {
     from {
@@ -69,5 +168,20 @@
   /* Gradient text */
   .gradient-text {
     @apply bg-gradient-to-r from-lastfm-red to-lastfm-red-light bg-clip-text text-transparent;
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .wordcloud-container {
+      @apply h-72;
+    }
+
+    .toggle-switch {
+      @apply w-40 h-9;
+    }
+
+    .toggle-option {
+      @apply text-xs px-2;
+    }
   }
 }

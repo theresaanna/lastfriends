@@ -113,11 +113,58 @@ export async function getUserTopAlbums(username, period = 'overall', limit = 50)
   return data.topalbums?.album || [];
 }
 
+// New function to get artist info with tags
+export async function getArtistInfo(artistName, mbid = null) {
+  try {
+    const params = mbid ? { mbid } : { artist: artistName };
+    const data = await makeLastFMRequest('artist.getinfo', params);
+    return data.artist;
+  } catch (error) {
+    console.warn(`Failed to get artist info for ${artistName}:`, error.message);
+    return null;
+  }
+}
+
+// Enhanced function to get top artists with tags
+export async function getUserTopArtistsWithTags(username, period = 'overall', limit = 50) {
+  const artists = await getUserTopArtists(username, period, limit);
+
+  // For performance, only fetch tags for top 30 artists
+  const artistsToEnrich = artists.slice(0, Math.min(30, artists.length));
+
+  // Batch fetch artist info with rate limiting
+  const enrichedArtists = [];
+  for (let i = 0; i < artistsToEnrich.length; i++) {
+    const artist = artistsToEnrich[i];
+    try {
+      // Rate limiting: wait 100ms between requests
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      const artistInfo = await getArtistInfo(artist.name, artist.mbid);
+      enrichedArtists.push({
+        ...artist,
+        tags: artistInfo?.tags || null,
+        bio: artistInfo?.bio?.summary || null
+      });
+    } catch (error) {
+      console.warn(`Failed to enrich artist ${artist.name}:`, error.message);
+      enrichedArtists.push(artist);
+    }
+  }
+
+  // Add remaining artists without tags
+  enrichedArtists.push(...artists.slice(artistsToEnrich.length));
+
+  return enrichedArtists;
+}
+
 export async function getUserData(username, period = 'overall') {
   try {
     const [userInfo, topArtists, topTracks, topAlbums] = await Promise.all([
       getUserInfo(username),
-      getUserTopArtists(username, period, 100),
+      getUserTopArtistsWithTags(username, period, 100), // Use enhanced function
       getUserTopTracks(username, period, 500),
       getUserTopAlbums(username, period, 50)
     ]);

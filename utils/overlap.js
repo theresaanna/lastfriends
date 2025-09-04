@@ -128,6 +128,142 @@ export function calculateTrackOverlap(user1Tracks, user2Tracks) {
   };
 }
 
+// New function to extract genres from artist tags
+export function extractGenresFromTags(artists) {
+  const genreCount = new Map();
+
+  // Common genre mappings and cleanup
+  const genreAliases = {
+    'electronic': ['electronica', 'electro', 'edm'],
+    'indie rock': ['indie', 'indierock'],
+    'alternative rock': ['alternative', 'alt-rock', 'alt rock'],
+    'hip hop': ['hip-hop', 'hiphop', 'rap'],
+    'dance': ['danceable'],
+    'ambient': ['atmospheric'],
+    'post-rock': ['postrock'],
+    'synthwave': ['synthpop', 'synth-pop', 'retrowave'],
+    'experimental': ['avant-garde'],
+    'folk': ['indie folk', 'folk rock'],
+    'metal': ['heavy metal'],
+    'punk': ['punk rock'],
+    'jazz': ['contemporary jazz'],
+    'classical': ['contemporary classical'],
+    'r&b': ['rnb', 'soul'],
+    'country': ['americana']
+  };
+
+  // Reverse mapping for aliases
+  const aliasToGenre = {};
+  Object.entries(genreAliases).forEach(([genre, aliases]) => {
+    aliases.forEach(alias => {
+      aliasToGenre[alias] = genre;
+    });
+  });
+
+  artists.forEach(artist => {
+    if (artist.tags && artist.tags.tag) {
+      const tags = Array.isArray(artist.tags.tag) ? artist.tags.tag : [artist.tags.tag];
+
+      tags.forEach(tag => {
+        if (tag.name) {
+          let genreName = tag.name.toLowerCase().trim();
+
+          // Skip very generic or non-genre tags
+          const skipTags = ['seen live', 'favorite', 'good', 'awesome', 'love', 'great', 'best', 'top'];
+          if (skipTags.some(skip => genreName.includes(skip))) return;
+
+          // Apply alias mapping
+          genreName = aliasToGenre[genreName] || genreName;
+
+          // Clean up the genre name
+          genreName = genreName
+            .replace(/[^\w\s-]/g, '') // Remove special characters except hyphens
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .trim();
+
+          if (genreName.length > 2) { // Skip very short tags
+            const count = genreCount.get(genreName) || 0;
+            genreCount.set(genreName, count + parseInt(artist.playcount || 0));
+          }
+        }
+      });
+    }
+  });
+
+  // Convert to sorted array
+  return Array.from(genreCount.entries())
+    .map(([name, count]) => ({
+      name: name.split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' '), // Title case
+      count
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20); // Top 20 genres
+}
+
+// New function to calculate genre overlap
+export function calculateGenreOverlap(user1Genres, user2Genres) {
+  const user1GenreNames = new Set(user1Genres.map(g => g.name.toLowerCase()));
+  const user2GenreNames = new Set(user2Genres.map(g => g.name.toLowerCase()));
+
+  const user1Map = new Map(user1Genres.map(g => [g.name.toLowerCase(), g]));
+  const user2Map = new Map(user2Genres.map(g => [g.name.toLowerCase(), g]));
+
+  const sharedGenres = [];
+  const uniqueToUser1 = [];
+  const uniqueToUser2 = [];
+
+  // Check user1's genres
+  for (const genre of user1Genres) {
+    const lowerName = genre.name.toLowerCase();
+    if (user2GenreNames.has(lowerName)) {
+      const user2Genre = user2Map.get(lowerName);
+      sharedGenres.push({
+        name: genre.name,
+        user1Count: genre.count,
+        user2Count: user2Genre.count,
+        user1Rank: user1Genres.indexOf(genre) + 1,
+        user2Rank: user2Genres.indexOf(user2Genre) + 1
+      });
+    } else {
+      uniqueToUser1.push({
+        name: genre.name,
+        count: genre.count,
+        rank: user1Genres.indexOf(genre) + 1
+      });
+    }
+  }
+
+  // Check user2's unique genres
+  for (const genre of user2Genres) {
+    const lowerName = genre.name.toLowerCase();
+    if (!user1GenreNames.has(lowerName)) {
+      uniqueToUser2.push({
+        name: genre.name,
+        count: genre.count,
+        rank: user2Genres.indexOf(genre) + 1
+      });
+    }
+  }
+
+  const totalUniqueGenres = user1GenreNames.size + user2GenreNames.size - sharedGenres.length;
+  const compatibilityScore = totalUniqueGenres > 0 ? sharedGenres.length / totalUniqueGenres : 0;
+
+  return {
+    shared: sharedGenres,
+    uniqueToUser1,
+    uniqueToUser2,
+    compatibilityScore: Math.round(compatibilityScore * 100) / 100,
+    stats: {
+      sharedCount: sharedGenres.length,
+      user1UniqueCount: uniqueToUser1.length,
+      user2UniqueCount: uniqueToUser2.length,
+      totalUnique: totalUniqueGenres
+    }
+  };
+}
+
 export function generateRecommendations(user1Data, user2Data, maxRecommendations = 10) {
   // Recommend top artists from user2 that user1 doesn't have
   const user1ArtistNames = new Set(user1Data.topArtists.map(a => a.name.toLowerCase()));
