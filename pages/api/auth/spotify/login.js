@@ -1,4 +1,4 @@
-// pages/api/auth/spotify/login.js - Initiate Spotify OAuth flow
+// pages/api/auth/spotify/login.js - More robust redirect URI handling
 import { SpotifyAuth } from '../../../../utils/spotifyAuth.js';
 import { SignJWT } from 'jose';
 
@@ -8,17 +8,27 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get the current host for dynamic redirect URI
-    const protocol = req.headers['x-forwarded-proto'] || 'https';
-    const host = req.headers.host;
-    const redirectUri = `${protocol}://${host}/api/auth/spotify/callback`;
+    // More robust redirect URI generation
+    let redirectUri;
 
-    console.log('Generated redirect URI:', redirectUri);
+    if (process.env.NODE_ENV === 'production') {
+      // Use explicit production URI
+      redirectUri = 'https://lastfriends.site/api/auth/spotify/callback';
+    } else {
+      // Dynamic for development
+      const protocol = req.headers['x-forwarded-proto'] || 'https';
+      const host = req.headers.host;
+      redirectUri = `${protocol}://${host}/api/auth/spotify/callback`;
+    }
+
+    console.log('Using redirect URI:', redirectUri);
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Headers:', { host: req.headers.host, proto: req.headers['x-forwarded-proto'] });
 
     // Generate OAuth URL with PKCE
     const { authUrl, codeVerifier, state } = SpotifyAuth.generateAuthUrl(null, redirectUri);
 
-    // Store OAuth data directly in encrypted cookies (more reliable than in-memory for dev)
+    // Rest of the function stays the same...
     const oauthData = {
       codeVerifier,
       state,
@@ -26,23 +36,21 @@ export default async function handler(req, res) {
       createdAt: Date.now()
     };
 
-    // Create a simple encrypted token for OAuth data
     const oauthToken = await new SignJWT(oauthData)
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
-      .setExpirationTime('10m') // 10 minutes
+      .setExpirationTime('10m')
       .sign(new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret-key'));
 
-    // Set temporary session cookie with OAuth data
     res.setHeader('Set-Cookie', [
-      `spotify_oauth_temp=${oauthToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600` // 10 minutes
+      `spotify_oauth_temp=${oauthToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`
     ]);
 
-    // Return auth URL for redirect
     return res.status(200).json({
       authUrl,
-      redirectUri, // Include this for debugging
+      redirectUri,
       state,
+      environment: process.env.NODE_ENV,
       message: 'Redirect user to authUrl to begin OAuth flow'
     });
 
