@@ -11,8 +11,9 @@
   },
   "dependencies": {
     "@vercel/analytics": "^1.5.0",
-    "ioredis": "^5.4.1",
     "bull": "^4.12.9",
+    "ioredis": "^5.4.1",
+    "jose": "^6.1.0",
     "next": "14.2.5",
     "react": "^18",
     "react-dom": "^18"
