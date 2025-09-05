@@ -7,6 +7,7 @@ import { compareUsers, ApiError } from '../utils/clientApi.js';
 import { CompatibilityGauge } from '../components/CompatibilityGauge.js';
 import { UserProfile } from '../components/MusicCards.js';
 import { StatsOverview } from '../components/StatsOverview.js';
+import { ProgressTracker } from '../components/ProgressTracker.js';
 import {
   OverviewTab,
   ArtistsTab,
@@ -20,6 +21,7 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+  const [backgroundJobs, setBackgroundJobs] = useState([]);
   const router = useRouter();
 
   // Effect to handle route changes and fetch data
@@ -48,6 +50,13 @@ export default function ComparePage() {
 
       const comparisonData = await compareUsers(user1, user2, period);
       setData(comparisonData);
+
+      // Check if background jobs were queued
+      if (comparisonData.metadata?.backgroundJobsQueued) {
+        console.log('Background jobs were queued for enhanced data collection');
+        // Note: In a real implementation, you'd get job IDs from the response
+        // For now, we'll just show that jobs are running
+      }
     } catch (err) {
       console.error('Comparison error:', err);
 
@@ -102,7 +111,7 @@ export default function ComparePage() {
           </button>
 
           <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center fade-in-up">
-            <div className="text-4xl mb-4">😓</div>
+            <div className="text-4xl mb-4">😔</div>
             <h3 className="text-xl font-bold text-red-800 mb-2">Oops! Something went wrong</h3>
             <p className="text-red-600 mb-6">{error}</p>
             <button
@@ -177,6 +186,22 @@ export default function ComparePage() {
           <UserProfile user={users.user2} />
         </div>
 
+        {/* Background Job Progress */}
+        {data.metadata?.backgroundJobsQueued && (
+          <div className="mb-8">
+            <ProgressTracker
+              jobId={null} // In a real implementation, you'd pass actual job IDs
+              onComplete={() => {
+                console.log('Background job completed');
+                // Optionally refresh the comparison data
+              }}
+              onError={(error) => {
+                console.error('Background job error:', error);
+              }}
+            />
+          </div>
+        )}
+
         {/* Compatibility Score */}
         <div className="card-elevated p-8 mb-8 text-center">
           <h2 className="text-3xl font-bold text-gray-900 mb-6 fade-in-up">Overall Compatibility</h2>
@@ -198,7 +223,7 @@ export default function ComparePage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-6 py-4 text-sm font-semibold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
+                  className={`px-6 py-4 text-sm font-semibold transition-all duration-200 flex items-center gap-2 whitespace-nowrap relative ${
                     activeTab === tab.id
                       ? 'bg-gradient-lastfm text-white border-b-2 border-lastfm-red shadow-lg'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -206,6 +231,9 @@ export default function ComparePage() {
                 >
                   <span>{tab.icon}</span>
                   {tab.label}
+                  {tab.enhanced && (
+                    <div className="w-2 h-2 bg-green-400 rounded-full ml-1" title="Enhanced data available"></div>
+                  )}
                 </button>
               ))}
             </nav>

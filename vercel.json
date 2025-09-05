@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "pages/api/workers/track-collector.js": {
+      "maxDuration": 30
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/workers/track-collector",
+      "schedule": "*/2 * * * *"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 // components/CompatibilityGauge.js
-export function CompatibilityGauge({ percentage, level }) {
+export function CompatibilityGauge({ percentage, level, isEnhanced = false }) {
   const circumference = 2 * Math.PI * 45;
   const strokeDasharray = circumference;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
@@ -19,7 +19,12 @@ export function CompatibilityGauge({ percentage, level }) {
   };
 
   return (
-    <div className="flex flex-col items-center fade-in-up">
+    <div className="flex flex-col items-center fade-in-up relative">
+      {isEnhanced && (
+        <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+          Enhanced
+        </div>
+      )}
       <div className="relative w-40 h-40">
         <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 100 100">
           <circle

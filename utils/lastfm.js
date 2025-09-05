@@ -1,6 +1,5 @@
 // utils/lastfm.js - Server-side Last.fm API calls
-const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
-const LASTFM_BASE_URL = 'http://ws.audioscrobbler.com/2.0/';
+const LASTFM_BASE_URL = 'https://ws.audioscrobbler.com/2.0/';
 
 export class LastFMError extends Error {
   constructor(message, code) {
@@ -11,8 +10,16 @@ export class LastFMError extends Error {
 }
 
 async function makeLastFMRequest(method, params = {}) {
+  // Read API key dynamically from process.env each time
+  const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
+
+  // Debug logging
+  console.log('🔍 makeLastFMRequest - API key check:', LASTFM_API_KEY ? 'Present' : 'Missing');
+  console.log('🔍 process.env.LASTFM_API_KEY:', process.env.LASTFM_API_KEY ? 'Present' : 'Missing');
+
   // Check if API key is available
   if (!LASTFM_API_KEY) {
+    console.error('❌ No API key found in makeLastFMRequest');
     throw new LastFMError('Last.fm API key not configured', 'NO_API_KEY');
   }
 
@@ -107,6 +114,17 @@ export async function getUserTopTracks(username, period = 'overall', limit = 50)
     user: username,
     period,
     limit: limit.toString()
+  });
+  return data.toptracks?.track || [];
+}
+
+// New function to get tracks with pagination support
+export async function getUserTopTracksWithPagination(username, period = 'overall', page = 1, limit = 200) {
+  const data = await makeLastFMRequest('user.gettoptracks', {
+    user: username,
+    period,
+    limit: limit.toString(),
+    page: page.toString()
   });
   return data.toptracks?.track || [];
 }
