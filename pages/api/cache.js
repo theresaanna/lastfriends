@@ -1,4 +1,4 @@
-// pages/api/cache.js - Cache management API
+// pages/api/cache.js - Enhanced Cache management API with Redis support
 import { cache } from '../../utils/cache.js';
 
 export default async function handler(req, res) {
@@ -15,8 +15,8 @@ export default async function handler(req, res) {
   try {
     switch (req.method) {
       case 'GET':
-        // Get cache statistics
-        const stats = cache.getStats();
+        // Get comprehensive cache statistics (Redis + Memory)
+        const stats = await cache.getStats();
         return res.status(200).json({
           success: true,
           cache: stats,
@@ -24,11 +24,11 @@ export default async function handler(req, res) {
         });
 
       case 'DELETE':
-        // Clear cache
-        cache.clear();
+        // Clear all cache (Redis + Memory)
+        await cache.clear();
         return res.status(200).json({
           success: true,
-          message: 'Cache cleared successfully',
+          message: 'All cache cleared successfully (Redis + Memory)',
           timestamp: new Date().toISOString()
         });
 

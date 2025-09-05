@@ -86,7 +86,8 @@ export default function ComparePage() {
             <div className="flex justify-center mb-6">
               <div className="w-12 h-12 border-4 border-lastfm-red border-t-transparent rounded-full animate-spin"></div>
             </div>
-            <p className="text-gray-600 text-lg">Fetching data from Last.fm and calculating overlaps...</p>
+              <p className="text-gray-600 text-lg">Fetching data from Last.fm and calculating overlaps...</p>
+              <p className="text-gray-600 text-md">(This might take a minute or two.)</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">

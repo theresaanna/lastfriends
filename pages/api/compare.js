@@ -1,4 +1,4 @@
-// pages/api/compare.js - Enhanced with Progressive Genre Loading
+// pages/api/compare.js - Enhanced with Redis + Progressive Genre Loading
 import { getUserData, getArtistInfo, LastFMError } from '../../utils/lastfm.js';
 import {
   calculateArtistOverlap,
@@ -10,7 +10,7 @@ import {
 } from '../../utils/overlap.js';
 import { withCache } from '../../utils/cache.js';
 
-// Enhanced cache with longer TTL for full comparisons
+// Enhanced cache with Redis support (longer TTL since Redis persists)
 const getCachedComparison = withCache(async (user1, user2, period) => {
   console.log(`Starting enhanced comparison for ${user1} vs ${user2} (${period})`);
 
@@ -74,10 +74,11 @@ const getCachedComparison = withCache(async (user1, user2, period) => {
     metadata: {
       user1ArtistsEnriched: user1ArtistsWithTags.filter(a => a.tags).length,
       user2ArtistsEnriched: user2ArtistsWithTags.filter(a => a.tags).length,
-      totalArtistsFetched: user1Data.topArtists.length + user2Data.topArtists.length
+      totalArtistsFetched: user1Data.topArtists.length + user2Data.topArtists.length,
+      cacheSource: 'redis-hybrid'
     }
   };
-}, 'fullComparison', 900); // 15 minutes cache for enhanced comparisons
+}, 'fullComparison', 1800); // 30 minutes cache (Redis can handle longer TTL)
 
 // Helper function to extract basic genres from artist names (immediate fallback)
 function extractBasicGenresFromArtists(artists) {
@@ -160,8 +161,8 @@ async function enrichArtistsWithTags(artists, maxArtists = 75) {
 }
 
 export default async function handler(req, res) {
-  // Enhanced cache headers
-  res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=1800');
+  // Enhanced cache headers for CDN + Redis
+  res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600');
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -182,10 +183,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log(`Starting enhanced comparison for ${user1} vs ${user2} (${period})`);
+    console.log(`Starting Redis-enhanced comparison for ${user1} vs ${user2} (${period})`);
     const startTime = Date.now();
 
-    // Use enhanced cached comparison function
+    // Use Redis-enhanced cached comparison function
     const comparisonResults = await getCachedComparison(user1, user2, period);
 
     const {
@@ -245,21 +246,21 @@ export default async function handler(req, res) {
       },
       metadata: {
         comparedAt: new Date().toISOString(),
-        apiVersion: '1.3',
+        apiVersion: '1.4', // Bumped for Redis integration
         processingTime: Date.now() - startTime,
-        cached: true,
+        redisEnabled: true,
         enhancedGenres: true,
         ...metadata
       }
     };
 
-    console.log(`Enhanced comparison completed in ${Date.now() - startTime}ms`);
+    console.log(`Redis-enhanced comparison completed in ${Date.now() - startTime}ms`);
     console.log(`Stats: ${artistOverlap.stats.totalUnique} total unique artists, ${user1Genres.length + user2Genres.length} total genres`);
 
     res.status(200).json(comparisonData);
 
   } catch (error) {
-    console.error('Enhanced comparison error:', error);
+    console.error('Redis-enhanced comparison error:', error);
 
     if (error instanceof LastFMError) {
       if (error.code === 'NO_API_KEY') {

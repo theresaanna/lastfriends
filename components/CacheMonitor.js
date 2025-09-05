@@ -1,4 +1,4 @@
-// components/CacheMonitor.js - Development cache monitoring component
+// components/CacheMonitor.js - Enhanced Development cache monitoring with Redis support
 import { useState, useEffect } from 'react';
 
 export function CacheMonitor({ adminKey }) {
@@ -107,24 +107,68 @@ export function CacheMonitor({ adminKey }) {
 
       {cacheStats && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-50 p-3 rounded">
-              <div className="text-2xl font-bold text-blue-600">{cacheStats.totalEntries}</div>
-              <div className="text-sm text-gray-600">Total Entries</div>
+          {/* Redis Stats */}
+          {cacheStats.redis && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h4 className="text-lg font-semibold text-green-800 mb-3">
+                Redis Cache {cacheStats.redis.available ? '✅ Connected' : '❌ Unavailable'}
+              </h4>
+              {cacheStats.redis.available && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white p-3 rounded">
+                    <div className="text-2xl font-bold text-green-600">{cacheStats.redis.entries}</div>
+                    <div className="text-sm text-gray-600">Redis Entries</div>
+                  </div>
+                  <div className="bg-white p-3 rounded">
+                    <div className="text-2xl font-bold text-green-600">
+                      {Math.round(cacheStats.redis.memory / 1024)}KB
+                    </div>
+                    <div className="text-sm text-gray-600">Redis Memory</div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="bg-gray-50 p-3 rounded">
-              <div className="text-2xl font-bold text-green-600">{cacheStats.validEntries}</div>
-              <div className="text-sm text-gray-600">Valid Entries</div>
-            </div>
-            <div className="bg-gray-50 p-3 rounded">
-              <div className="text-2xl font-bold text-red-600">{cacheStats.expiredEntries}</div>
-              <div className="text-sm text-gray-600">Expired</div>
-            </div>
-            <div className="bg-gray-50 p-3 rounded">
-              <div className="text-2xl font-bold text-purple-600">
-                {Math.round(cacheStats.memoryUsage / 1024)}KB
+          )}
+
+          {/* Memory Cache Stats */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 className="text-lg font-semibold text-blue-800 mb-3">In-Memory Cache</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white p-3 rounded">
+                <div className="text-2xl font-bold text-blue-600">{cacheStats.memory?.totalEntries || 0}</div>
+                <div className="text-sm text-gray-600">Memory Entries</div>
               </div>
-              <div className="text-sm text-gray-600">Memory</div>
+              <div className="bg-white p-3 rounded">
+                <div className="text-2xl font-bold text-green-600">{cacheStats.memory?.validEntries || 0}</div>
+                <div className="text-sm text-gray-600">Valid Entries</div>
+              </div>
+              <div className="bg-white p-3 rounded">
+                <div className="text-2xl font-bold text-red-600">{cacheStats.memory?.expiredEntries || 0}</div>
+                <div className="text-sm text-gray-600">Expired</div>
+              </div>
+              <div className="bg-white p-3 rounded">
+                <div className="text-2xl font-bold text-purple-600">
+                  {Math.round((cacheStats.memory?.memoryUsage || 0) / 1024)}KB
+                </div>
+                <div className="text-sm text-gray-600">Memory Usage</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Combined Stats */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="text-lg font-semibold text-gray-800 mb-3">Combined Statistics</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-3 rounded">
+                <div className="text-2xl font-bold text-indigo-600">{cacheStats.totalEntries || 0}</div>
+                <div className="text-sm text-gray-600">Total Entries</div>
+              </div>
+              <div className="bg-white p-3 rounded">
+                <div className="text-2xl font-bold text-indigo-600">
+                  {Math.round((cacheStats.totalMemoryUsage || 0) / 1024)}KB
+                </div>
+                <div className="text-sm text-gray-600">Total Memory</div>
+              </div>
             </div>
           </div>
 
@@ -134,9 +178,10 @@ export function CacheMonitor({ adminKey }) {
             </p>
           )}
 
-          {cacheStats.entries && cacheStats.entries.length > 0 && (
+          {/* Memory Cache Entries Detail */}
+          {cacheStats.memory?.entries && cacheStats.memory.entries.length > 0 && (
             <div className="mt-4">
-              <h4 className="text-sm font-medium text-gray-900 mb-2">Cache Entries</h4>
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Recent Memory Cache Entries</h4>
               <div className="max-h-64 overflow-y-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -148,7 +193,7 @@ export function CacheMonitor({ adminKey }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {cacheStats.entries.slice(0, 20).map((entry, index) => (
+                    {cacheStats.memory.entries.slice(0, 20).map((entry, index) => (
                       <tr key={index} className="border-t border-gray-100">
                         <td className="p-2 font-mono text-xs truncate max-w-xs">
                           {entry.key.split(':')[0]}...
@@ -172,9 +217,9 @@ export function CacheMonitor({ adminKey }) {
                     ))}
                   </tbody>
                 </table>
-                {cacheStats.entries.length > 20 && (
+                {cacheStats.memory.entries.length > 20 && (
                   <p className="text-xs text-gray-500 mt-2">
-                    Showing 20 of {cacheStats.entries.length} entries
+                    Showing 20 of {cacheStats.memory.entries.length} entries
                   </p>
                 )}
               </div>
