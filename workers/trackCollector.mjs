@@ -196,6 +196,37 @@ async function collectUserTracks(job, username, period) {
   };
 }
 
+// Helper function to enrich artists with tags for genre extraction
+async function enrichArtistsWithTags(artists, maxArtists = 30) {
+  const artistsToEnrich = artists.slice(0, Math.min(maxArtists, artists.length));
+  const enrichedArtists = [];
+
+  for (let i = 0; i < artistsToEnrich.length; i++) {
+    const artist = artistsToEnrich[i];
+    try {
+      // Rate limiting: wait 200ms between requests (more conservative for worker)
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      const artistInfo = await getArtistInfo(artist.name, artist.mbid);
+      enrichedArtists.push({
+        ...artist,
+        tags: artistInfo?.tags || null,
+        bio: artistInfo?.bio?.summary || null
+      });
+    } catch (error) {
+      console.warn(`Failed to enrich artist ${artist.name}:`, error.message);
+      enrichedArtists.push(artist);
+    }
+  }
+
+  // Add remaining artists without tags
+  enrichedArtists.push(...artists.slice(artistsToEnrich.length));
+
+  return enrichedArtists;
+}
+
 // Helper function to get tracks with pagination
 async function getUserTopTracksWithPagination(username, period, page, limit) {
   try {
