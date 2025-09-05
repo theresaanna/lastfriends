@@ -1,4 +1,7 @@
 // utils/lastfm.js - Server-side Last.fm API calls
+import { cache } from './cache.js';
+
+const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
 const LASTFM_BASE_URL = 'https://ws.audioscrobbler.com/2.0/';
 
 export class LastFMError extends Error {
@@ -10,16 +13,8 @@ export class LastFMError extends Error {
 }
 
 async function makeLastFMRequest(method, params = {}) {
-  // Read API key dynamically from process.env each time
-  const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
-
-  // Debug logging
-  console.log('🔍 makeLastFMRequest - API key check:', LASTFM_API_KEY ? 'Present' : 'Missing');
-  console.log('🔍 process.env.LASTFM_API_KEY:', process.env.LASTFM_API_KEY ? 'Present' : 'Missing');
-
   // Check if API key is available
   if (!LASTFM_API_KEY) {
-    console.error('❌ No API key found in makeLastFMRequest');
     throw new LastFMError('Last.fm API key not configured', 'NO_API_KEY');
   }
 
@@ -118,17 +113,6 @@ export async function getUserTopTracks(username, period = 'overall', limit = 50)
   return data.toptracks?.track || [];
 }
 
-// New function to get tracks with pagination support
-export async function getUserTopTracksWithPagination(username, period = 'overall', page = 1, limit = 200) {
-  const data = await makeLastFMRequest('user.gettoptracks', {
-    user: username,
-    period,
-    limit: limit.toString(),
-    page: page.toString()
-  });
-  return data.toptracks?.track || [];
-}
-
 export async function getUserTopAlbums(username, period = 'overall', limit = 50) {
   const data = await makeLastFMRequest('user.gettopalbums', {
     user: username,
@@ -170,3 +154,7 @@ export async function getUserData(username, period = 'overall') {
     throw error;
   }
 }
+
+// Export cache functions for the cache API endpoint
+export const getCacheStats = () => cache.getStats();
+export const clearCache = () => cache.clear();

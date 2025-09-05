@@ -1,5 +1,5 @@
 // pages/api/cache.js - Cache management API
-import { getCacheStats, clearCache } from '../../utils/lastfm.js';
+import { cache } from '../../utils/cache.js';
 
 export default async function handler(req, res) {
   // Simple authentication check - you can enhance this
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     switch (req.method) {
       case 'GET':
         // Get cache statistics
-        const stats = getCacheStats();
+        const stats = cache.getStats();
         return res.status(200).json({
           success: true,
           cache: stats,
@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
       case 'DELETE':
         // Clear cache
-        clearCache();
+        cache.clear();
         return res.status(200).json({
           success: true,
           message: 'Cache cleared successfully',
