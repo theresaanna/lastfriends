@@ -1,4 +1,4 @@
-// utils/overlap.js
+// utils/overlap.js - Enhanced with better genre extraction
 
 export function calculateArtistOverlap(user1Artists, user2Artists) {
   const user1ArtistNames = new Set(user1Artists.map(a => a.name.toLowerCase()));
@@ -128,82 +128,123 @@ export function calculateTrackOverlap(user1Tracks, user2Tracks) {
   };
 }
 
-// New function to extract genres from artist tags
+// Enhanced function to extract genres from artist tags with better cleanup
 export function extractGenresFromTags(artists) {
   const genreCount = new Map();
 
-  // Common genre mappings and cleanup
+  // Comprehensive genre mappings and cleanup
   const genreAliases = {
-    'electronic': ['electronica', 'electro', 'edm'],
-    'indie rock': ['indie', 'indierock'],
-    'alternative rock': ['alternative', 'alt-rock', 'alt rock'],
-    'hip hop': ['hip-hop', 'hiphop', 'rap'],
-    'dance': ['danceable'],
-    'ambient': ['atmospheric'],
-    'post-rock': ['postrock'],
-    'synthwave': ['synthpop', 'synth-pop', 'retrowave'],
-    'experimental': ['avant-garde'],
-    'folk': ['indie folk', 'folk rock'],
-    'metal': ['heavy metal'],
-    'punk': ['punk rock'],
-    'jazz': ['contemporary jazz'],
-    'classical': ['contemporary classical'],
-    'r&b': ['rnb', 'soul'],
-    'country': ['americana']
+    'electronic': ['electronica', 'electro', 'edm', 'electronic music', 'dance music'],
+    'indie rock': ['indie', 'indierock', 'indie-rock'],
+    'alternative rock': ['alternative', 'alt-rock', 'alt rock', 'alternative rock'],
+    'hip hop': ['hip-hop', 'hiphop', 'rap music', 'hip hop music'],
+    'dance': ['danceable', 'dance music', 'club'],
+    'ambient': ['atmospheric', 'ambient music', 'drone'],
+    'post-rock': ['postrock', 'post rock'],
+    'synthwave': ['synthpop', 'synth-pop', 'retrowave', 'new wave'],
+    'experimental': ['avant-garde', 'experimental music'],
+    'folk': ['indie folk', 'folk rock', 'folk music'],
+    'metal': ['heavy metal', 'death metal', 'black metal'],
+    'punk': ['punk rock', 'punk music'],
+    'jazz': ['contemporary jazz', 'jazz music'],
+    'classical': ['contemporary classical', 'classical music'],
+    'r&b': ['rnb', 'soul music', 'rhythm and blues'],
+    'country': ['americana', 'country music'],
+    'rock': ['rock music', 'classic rock'],
+    'pop': ['pop music', 'popular'],
+    'reggae': ['reggae music', 'ska'],
+    'blues': ['blues music', 'electric blues']
   };
 
   // Reverse mapping for aliases
   const aliasToGenre = {};
   Object.entries(genreAliases).forEach(([genre, aliases]) => {
     aliases.forEach(alias => {
-      aliasToGenre[alias] = genre;
+      aliasToGenre[alias.toLowerCase()] = genre;
     });
   });
+
+  // Words to skip entirely
+  const skipWords = new Set([
+    'seen live', 'favorite', 'good', 'awesome', 'love', 'great', 'best', 'top',
+    'music', 'band', 'artist', 'singer', 'group', 'the', 'and', 'or', 'but',
+    'favorite artists', 'amazing', 'perfect', 'beautiful', 'incredible',
+    'legend', 'classic', 'essential', 'masterpiece', 'genius', 'brilliant'
+  ]);
 
   artists.forEach(artist => {
     if (artist.tags && artist.tags.tag) {
       const tags = Array.isArray(artist.tags.tag) ? artist.tags.tag : [artist.tags.tag];
+      const artistPlaycount = parseInt(artist.playcount) || 1;
 
       tags.forEach(tag => {
         if (tag.name) {
           let genreName = tag.name.toLowerCase().trim();
 
-          // Skip very generic or non-genre tags
-          const skipTags = ['seen live', 'favorite', 'good', 'awesome', 'love', 'great', 'best', 'top'];
-          if (skipTags.some(skip => genreName.includes(skip))) return;
+          // Skip non-genre tags
+          if (skipWords.has(genreName) || genreName.length < 3 || genreName.length > 30) {
+            return;
+          }
 
           // Apply alias mapping
           genreName = aliasToGenre[genreName] || genreName;
 
-          // Clean up the genre name
+          // Clean up the genre name more thoroughly
           genreName = genreName
-            .replace(/[^\w\s-]/g, '') // Remove special characters except hyphens
+            .replace(/[^\w\s-&]/g, '') // Keep alphanumeric, spaces, hyphens, and ampersands
             .replace(/\s+/g, ' ') // Normalize whitespace
+            .replace(/^(the\s+)/i, '') // Remove "the" prefix
             .trim();
 
-          if (genreName.length > 2) { // Skip very short tags
+          // Final validation
+          if (genreName.length >= 3 && genreName.length <= 25 && !skipWords.has(genreName)) {
             const count = genreCount.get(genreName) || 0;
-            genreCount.set(genreName, count + parseInt(artist.playcount || 0));
+            genreCount.set(genreName, count + artistPlaycount);
           }
         }
       });
     }
   });
 
-  // Convert to sorted array
+  // Convert to sorted array with better title casing
   return Array.from(genreCount.entries())
     .map(([name, count]) => ({
-      name: name.split(' ').map(word =>
-        word.charAt(0).toUpperCase() + word.slice(1)
-      ).join(' '), // Title case
+      name: titleCase(name),
       count
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 20); // Top 20 genres
 }
 
-// New function to calculate genre overlap
+// Helper function for better title casing
+function titleCase(str) {
+  const exceptions = ['and', 'or', 'the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'with'];
+
+  return str.split(' ').map((word, index) => {
+    if (index === 0 || !exceptions.includes(word.toLowerCase())) {
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }
+    return word.toLowerCase();
+  }).join(' ');
+}
+
+// Enhanced function to calculate genre overlap
 export function calculateGenreOverlap(user1Genres, user2Genres) {
+  if (!user1Genres || !user2Genres || user1Genres.length === 0 || user2Genres.length === 0) {
+    return {
+      shared: [],
+      uniqueToUser1: user1Genres || [],
+      uniqueToUser2: user2Genres || [],
+      compatibilityScore: 0,
+      stats: {
+        sharedCount: 0,
+        user1UniqueCount: (user1Genres || []).length,
+        user2UniqueCount: (user2Genres || []).length,
+        totalUnique: (user1Genres || []).length + (user2Genres || []).length
+      }
+    };
+  }
+
   const user1GenreNames = new Set(user1Genres.map(g => g.name.toLowerCase()));
   const user2GenreNames = new Set(user2Genres.map(g => g.name.toLowerCase()));
 

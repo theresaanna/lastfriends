@@ -1,6 +1,14 @@
-// utils/clientLastfm.js - Client-side Last.fm API calls
+// utils/clientLastfm.js - Client-side Last.fm API calls (Standardized)
 const LASTFM_API_KEY = process.env.NEXT_PUBLIC_LASTFM_API_KEY;
 const LASTFM_BASE_URL = 'https://ws.audioscrobbler.com/2.0/';
+
+// Standardized API limits (matching server-side)
+const API_LIMITS = {
+  ARTISTS: 500,
+  TRACKS: 500,
+  ALBUMS: 100,
+  ENRICHED_ARTISTS: 75
+};
 
 export class LastFMError extends Error {
   constructor(message, code) {
@@ -86,7 +94,7 @@ export async function getUserInfo(username) {
   }
 }
 
-export async function getUserTopArtists(username, period = 'overall', limit = 50) {
+export async function getUserTopArtists(username, period = 'overall', limit = API_LIMITS.ARTISTS) {
   const data = await makeLastFMRequest('user.gettopartists', {
     user: username,
     period,
@@ -95,7 +103,7 @@ export async function getUserTopArtists(username, period = 'overall', limit = 50
   return data.topartists?.artist || [];
 }
 
-export async function getUserTopTracks(username, period = 'overall', limit = 50) {
+export async function getUserTopTracks(username, period = 'overall', limit = API_LIMITS.TRACKS) {
   const data = await makeLastFMRequest('user.gettoptracks', {
     user: username,
     period,
@@ -104,7 +112,7 @@ export async function getUserTopTracks(username, period = 'overall', limit = 50)
   return data.toptracks?.track || [];
 }
 
-export async function getUserTopAlbums(username, period = 'overall', limit = 50) {
+export async function getUserTopAlbums(username, period = 'overall', limit = API_LIMITS.ALBUMS) {
   const data = await makeLastFMRequest('user.gettopalbums', {
     user: username,
     period,
@@ -125,21 +133,21 @@ export async function getArtistInfo(artistName, mbid = null) {
   }
 }
 
-// Enhanced function to get top artists with tags
-export async function getUserTopArtistsWithTags(username, period = 'overall', limit = 50) {
+// Enhanced function to get top artists with tags (standardized limits)
+export async function getUserTopArtistsWithTags(username, period = 'overall', limit = API_LIMITS.ARTISTS) {
   const artists = await getUserTopArtists(username, period, limit);
 
-  // For performance, only fetch tags for top 30 artists
-  const artistsToEnrich = artists.slice(0, Math.min(30, artists.length));
+  // For performance, only fetch tags for top artists
+  const artistsToEnrich = artists.slice(0, Math.min(API_LIMITS.ENRICHED_ARTISTS, artists.length));
 
   // Batch fetch artist info with rate limiting
   const enrichedArtists = [];
   for (let i = 0; i < artistsToEnrich.length; i++) {
     const artist = artistsToEnrich[i];
     try {
-      // Rate limiting: wait 100ms between requests
+      // Rate limiting: wait 120ms between requests (matching server-side)
       if (i > 0) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 120));
       }
 
       const artistInfo = await getArtistInfo(artist.name, artist.mbid);
@@ -164,9 +172,9 @@ export async function getUserData(username, period = 'overall') {
   try {
     const [userInfo, topArtists, topTracks, topAlbums] = await Promise.all([
       getUserInfo(username),
-      getUserTopArtistsWithTags(username, period, 100), // Use enhanced function
-      getUserTopTracks(username, period, 500),
-      getUserTopAlbums(username, period, 50)
+      getUserTopArtistsWithTags(username, period), // Use enhanced function with standardized limits
+      getUserTopTracks(username, period),
+      getUserTopAlbums(username, period)
     ]);
 
     return {

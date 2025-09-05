@@ -1,8 +1,14 @@
 // utils/lastfm.js - Server-side Last.fm API calls
-import { cache } from './cache.js';
-
 const LASTFM_API_KEY = process.env.LASTFM_API_KEY;
 const LASTFM_BASE_URL = 'https://ws.audioscrobbler.com/2.0/';
+
+// Standardized API limits
+const API_LIMITS = {
+  ARTISTS: 500,
+  TRACKS: 500,
+  ALBUMS: 100,
+  ENRICHED_ARTISTS: 75 // Increased for better genre data
+};
 
 export class LastFMError extends Error {
   constructor(message, code) {
@@ -95,7 +101,7 @@ export async function getUserInfo(username) {
   }
 }
 
-export async function getUserTopArtists(username, period = 'overall', limit = 50) {
+export async function getUserTopArtists(username, period = 'overall', limit = API_LIMITS.ARTISTS) {
   const data = await makeLastFMRequest('user.gettopartists', {
     user: username,
     period,
@@ -104,7 +110,7 @@ export async function getUserTopArtists(username, period = 'overall', limit = 50
   return data.topartists?.artist || [];
 }
 
-export async function getUserTopTracks(username, period = 'overall', limit = 50) {
+export async function getUserTopTracks(username, period = 'overall', limit = API_LIMITS.TRACKS) {
   const data = await makeLastFMRequest('user.gettoptracks', {
     user: username,
     period,
@@ -113,7 +119,7 @@ export async function getUserTopTracks(username, period = 'overall', limit = 50)
   return data.toptracks?.track || [];
 }
 
-export async function getUserTopAlbums(username, period = 'overall', limit = 50) {
+export async function getUserTopAlbums(username, period = 'overall', limit = API_LIMITS.ALBUMS) {
   const data = await makeLastFMRequest('user.gettopalbums', {
     user: username,
     period,
@@ -122,7 +128,7 @@ export async function getUserTopAlbums(username, period = 'overall', limit = 50)
   return data.topalbums?.album || [];
 }
 
-// New function to get artist info with tags
+// Enhanced function to get artist info with tags and better error handling
 export async function getArtistInfo(artistName, mbid = null) {
   try {
     const params = mbid ? { mbid } : { artist: artistName };
@@ -134,13 +140,118 @@ export async function getArtistInfo(artistName, mbid = null) {
   }
 }
 
+// Progressive genre extraction function
+export async function getUserTopArtistsWithGenres(username, period = 'overall', progressCallback = null) {
+  try {
+    // First, get all artists
+    const allArtists = await getUserTopArtists(username, period);
+
+    // Send basic data immediately if callback provided
+    if (progressCallback) {
+      progressCallback({
+        type: 'artists_loaded',
+        artists: allArtists,
+        basicGenres: extractBasicGenres(allArtists)
+      });
+    }
+
+    // Then progressively enrich with tags
+    const artistsToEnrich = allArtists.slice(0, Math.min(API_LIMITS.ENRICHED_ARTISTS, allArtists.length));
+    const enrichedArtists = [];
+
+    for (let i = 0; i < artistsToEnrich.length; i++) {
+      const artist = artistsToEnrich[i];
+      try {
+        // Rate limiting: wait 120ms between requests for better reliability
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 120));
+        }
+
+        const artistInfo = await getArtistInfo(artist.name, artist.mbid);
+        const enrichedArtist = {
+          ...artist,
+          tags: artistInfo?.tags || null,
+          bio: artistInfo?.bio?.summary || null
+        };
+        enrichedArtists.push(enrichedArtist);
+
+        // Send progress updates every 10 artists
+        if (progressCallback && (i + 1) % 10 === 0) {
+          progressCallback({
+            type: 'enrichment_progress',
+            processed: i + 1,
+            total: artistsToEnrich.length,
+            enrichedArtists: [...enrichedArtists, ...allArtists.slice(enrichedArtists.length)]
+          });
+        }
+      } catch (error) {
+        console.warn(`Failed to enrich artist ${artist.name}:`, error.message);
+        enrichedArtists.push(artist);
+      }
+    }
+
+    // Add remaining artists without tags
+    const finalArtists = [...enrichedArtists, ...allArtists.slice(artistsToEnrich.length)];
+
+    // Send final update
+    if (progressCallback) {
+      progressCallback({
+        type: 'enrichment_complete',
+        artists: finalArtists,
+        enrichedCount: enrichedArtists.length
+      });
+    }
+
+    return finalArtists;
+  } catch (error) {
+    console.error('Error in getUserTopArtistsWithGenres:', error);
+    throw error;
+  }
+}
+
+// Fallback genre extraction from artist names (for immediate display)
+function extractBasicGenres(artists) {
+  // Basic genre mapping for common artist patterns
+  const genreKeywords = {
+    'electronic': ['electronic', 'synth', 'techno', 'house', 'ambient', 'edm'],
+    'rock': ['rock', 'metal', 'punk', 'grunge'],
+    'pop': ['pop', 'mainstream'],
+    'hip hop': ['hip', 'hop', 'rap', 'mc'],
+    'jazz': ['jazz', 'blues'],
+    'classical': ['orchestra', 'symphony', 'classical'],
+    'folk': ['folk', 'acoustic', 'country'],
+    'indie': ['indie', 'alternative', 'alt']
+  };
+
+  const genreCount = new Map();
+
+  // This is a very basic fallback - real genres will come from API tags
+  artists.slice(0, 20).forEach(artist => {
+    const artistName = artist.name.toLowerCase();
+    Object.entries(genreKeywords).forEach(([genre, keywords]) => {
+      if (keywords.some(keyword => artistName.includes(keyword))) {
+        const count = genreCount.get(genre) || 0;
+        genreCount.set(genre, count + (parseInt(artist.playcount) || 0));
+      }
+    });
+  });
+
+  return Array.from(genreCount.entries())
+    .map(([name, count]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      count,
+      isBasic: true // Flag to indicate this is fallback data
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
 export async function getUserData(username, period = 'overall') {
   try {
     const [userInfo, topArtists, topTracks, topAlbums] = await Promise.all([
       getUserInfo(username),
-      getUserTopArtists(username, period, 100),
-      getUserTopTracks(username, period, 100),
-      getUserTopAlbums(username, period, 50)
+      getUserTopArtists(username, period),
+      getUserTopTracks(username, period),
+      getUserTopAlbums(username, period)
     ]);
 
     return {
@@ -155,6 +266,13 @@ export async function getUserData(username, period = 'overall') {
   }
 }
 
-// Export cache functions for the cache API endpoint
-export const getCacheStats = () => cache.getStats();
-export const clearCache = () => cache.clear();
+// Export cache stats and clear functions (for the cache monitor)
+import { cache } from './cache.js';
+
+export function getCacheStats() {
+  return cache.getStats();
+}
+
+export function clearCache() {
+  cache.clear();
+}
