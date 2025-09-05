@@ -29,19 +29,11 @@ export function StatsOverview({ analysis, metadata }) {
       bgColor: 'bg-purple-50',
       icon: '👥',
       enhanced: isEnhanced
-    },
-    {
-      label: 'Track Match',
-      value: Math.round(compatibility.trackScore * 100) + '%',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
-      icon: '🎤',
-      enhanced: isEnhanced
     }
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
       {stats.map((stat, index) => (
         <div
           key={index}
