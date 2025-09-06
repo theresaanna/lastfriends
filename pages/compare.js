@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { compareUsers, ApiError } from '../utils/clientApi.js';
+import Layout from '../components/Layout';
 
 // Import all component modules
 import { CompatibilityGauge } from '../components/CompatibilityGauge.js';
@@ -79,8 +80,8 @@ export default function ComparePage() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-6xl mx-auto px-4">
+      <Layout>
+        <div className="py-8">
           <div className="text-center mb-8 fade-in-up">
             <h1 className="text-4xl font-bold gradient-text mb-4">Analyzing Music Compatibility</h1>
             <div className="flex justify-center mb-6">
@@ -95,15 +96,15 @@ export default function ComparePage() {
             <UserProfile user={{}} isLoading={true} />
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen py-8">
-        <div className="max-w-4xl mx-auto px-4">
+      <Layout>
+        <div className="py-8">
           <button
             onClick={() => router.push('/')}
             className="btn-secondary mb-6"
@@ -123,7 +124,7 @@ export default function ComparePage() {
             </button>
           </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
@@ -166,8 +167,8 @@ export default function ComparePage() {
   };
 
   return (
-    <div className="min-h-screen py-8">
-      <div className="max-w-6xl mx-auto px-4">
+    <Layout>
+      <div className="py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8 fade-in-up">
           <button
@@ -273,6 +274,6 @@ export default function ComparePage() {
           </footer>
         </div>
       </div>
-    </div>
+    </Layout>
   );
 }
