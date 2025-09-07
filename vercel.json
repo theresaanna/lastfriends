@@ -20,14 +20,6 @@
       "source": "/api/auth/error",
       "destination": "/auth/signin",
       "permanent": false
-    },
-    {
-      "source": "/(.*)",
-      "has": [
-        { "type": "host", "value": "www.lastfriends.site" }
-      ],
-      "destination": "https://lastfriends.site/$1",
-      "permanent": true
     }
   ]
 }
