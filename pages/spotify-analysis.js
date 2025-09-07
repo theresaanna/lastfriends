@@ -162,16 +162,18 @@ export default function SpotifyAnalysisPage() {
     <Layout>
       <div className="py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8 fade-in-up">
-          <button
-            onClick={() => router.push('/')}
-            className="btn-secondary"
-          >
-            ← New Analysis
-          </button>
+        <div className="grid grid-cols-3 items-center mb-8 fade-in-up">
+          <div className="justify-self-start">
+            <button
+              onClick={() => router.push('/')}
+              className="btn-secondary"
+            >
+              ← New Analysis
+            </button>
+          </div>
 
-          <h1 className="text-3xl font-bold gradient-text">Your Spotify Music Analysis</h1>
-          <div></div>
+          <h1 className="text-3xl font-bold gradient-text text-center">Your Spotify Music Analysis</h1>
+          <div className="justify-self-end"></div>
         </div>
 
         {/* User Profile */}

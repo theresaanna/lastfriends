@@ -202,7 +202,8 @@ export class SpotifyDataAPI {
         const albums = data.items.map((item, index) => ({
           name: item.album.name,
           artist: {
-            name: item.album.artists[0]?.name || 'Unknown Artist'
+            name: item.album.artists[0]?.name || 'Unknown Artist',
+            spotifyId: item.album.artists[0]?.id || null
           },
           playcount: 0, // Spotify doesn't provide play counts
           mbid: null,
@@ -230,6 +231,92 @@ export class SpotifyDataAPI {
     }
 
     return allAlbums.slice(0, limit);
+  }
+
+  // Get user's saved tracks (Liked Songs)
+  static async getUserSavedTracks(accessToken, limit = 500) {
+    const params = {
+      limit: Math.min(50, limit), // API max 50
+      offset: 0
+    };
+
+    const allTracks = [];
+    let hasMore = true;
+
+    while (hasMore && allTracks.length < limit) {
+      const data = await this.makeSpotifyRequest('/me/tracks', accessToken, { params });
+      if (data.items && data.items.length > 0) {
+        const tracks = data.items.map((item, index) => {
+          const track = item.track;
+          return {
+            name: track.name,
+            artist: {
+              name: track.artists[0]?.name || 'Unknown Artist',
+              mbid: null
+            },
+            playcount: 0,
+            mbid: null,
+            url: track.external_urls?.spotify || '',
+            image: track.album?.images?.[0]?.url || '',
+            duration: track.duration_ms,
+            popularity: track.popularity || 0,
+            explicit: track.explicit || false,
+            rank: params.offset + index + 1,
+            spotifyId: track.id,
+            spotifyUri: track.uri,
+            album: {
+              name: track.album?.name || '',
+              image: track.album?.images?.[0]?.url || ''
+            }
+          };
+        });
+        allTracks.push(...tracks);
+        params.offset = allTracks.length;
+        hasMore = data.next !== null && allTracks.length < limit;
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+
+    return allTracks.slice(0, limit);
+  }
+
+  // Get followed artists (fallback source)
+  static async getFollowedArtists(accessToken, limit = 200) {
+    let after = undefined;
+    const all = [];
+
+    while (all.length < limit) {
+      const params = { type: 'artist', limit: Math.min(50, limit - all.length) };
+      if (after) params.after = after;
+      const data = await this.makeSpotifyRequest('/me/following', accessToken, { params });
+      if (data.artists && data.artists.items && data.artists.items.length > 0) {
+        const artists = data.artists.items.map((artist, idx) => ({
+          name: artist.name,
+          playcount: 0,
+          mbid: null,
+          url: artist.external_urls?.spotify || '',
+          image: artist.images?.[0]?.url || '',
+          genres: artist.genres || [],
+          popularity: artist.popularity || 0,
+          followers: artist.followers?.total || 0,
+          rank: all.length + idx + 1,
+          spotifyId: artist.id,
+          spotifyUri: artist.uri
+        }));
+        all.push(...artists);
+        after = data.artists.cursors?.after;
+        if (!after) break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } else {
+        break;
+      }
+    }
+
+    return all.slice(0, limit);
   }
 
   // Convert Spotify time range to Last.fm period equivalent
@@ -260,12 +347,74 @@ export class SpotifyDataAPI {
     const timeRange = this.convertPeriodToTimeRange(period);
 
     try {
-      const [userInfo, topArtists, topTracks, savedAlbums] = await Promise.all([
+      const [userInfo, topArtistsRaw, topTracksRaw, savedAlbums] = await Promise.all([
         this.getUserInfo(accessToken),
         this.getUserTopArtists(accessToken, timeRange, 500),
         this.getUserTopTracks(accessToken, timeRange, 500),
         this.getUserSavedAlbums(accessToken, 100)
       ]);
+
+      let topArtists = topArtistsRaw;
+      let topTracks = topTracksRaw;
+
+      // Fallbacks when Spotify has no top data for the account
+      if ((topArtists?.length || 0) === 0 || (topTracks?.length || 0) === 0) {
+        // Try to derive from saved tracks and followed artists
+        const [savedTracks, followedArtists] = await Promise.all([
+          this.getUserSavedTracks(accessToken, 500).catch(() => []),
+          this.getFollowedArtists(accessToken, 200).catch(() => [])
+        ]);
+
+        if ((topTracks?.length || 0) === 0 && savedTracks.length > 0) {
+          // Use saved tracks as a proxy for top tracks
+          topTracks = savedTracks.slice(0, 500).map((t, idx) => ({ ...t, rank: idx + 1 }));
+        }
+
+        if ((topArtists?.length || 0) === 0) {
+          // Build artist counts from saved tracks and saved albums
+          const counts = new Map();
+
+          savedTracks.forEach(t => {
+            const name = t.artist?.name || 'Unknown Artist';
+            counts.set(name, (counts.get(name) || 0) + 1);
+          });
+
+          savedAlbums.forEach(a => {
+            const name = a.artist?.name || 'Unknown Artist';
+            counts.set(name, (counts.get(name) || 0) + 1);
+          });
+
+          let derivedArtists = Array.from(counts.entries()).map(([name, count]) => ({
+            name,
+            playcount: count,
+            mbid: null,
+            url: '',
+            image: '',
+            genres: [],
+            popularity: 0,
+            followers: 0,
+            rank: 0,
+            spotifyId: null,
+            spotifyUri: null
+          }));
+
+          // Enrich with followed artists data where available
+          const followedByName = new Map(followedArtists.map(a => [a.name, a]));
+          derivedArtists = derivedArtists.map(a => {
+            const f = followedByName.get(a.name);
+            if (f) {
+              return { ...a, image: f.image || a.image, url: f.url || a.url, popularity: f.popularity || a.popularity, followers: f.followers || a.followers, spotifyId: f.spotifyId || a.spotifyId, spotifyUri: f.spotifyUri || a.spotifyUri };
+            }
+            return a;
+          });
+
+          // Sort by playcount desc and assign rank
+          derivedArtists.sort((a, b) => (b.playcount || 0) - (a.playcount || 0));
+          derivedArtists = derivedArtists.map((a, idx) => ({ ...a, rank: idx + 1 }));
+
+          topArtists = derivedArtists.slice(0, 500);
+        }
+      }
 
       // Update user info with calculated counts
       userInfo.artistCount = topArtists.length;

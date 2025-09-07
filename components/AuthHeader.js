@@ -1,6 +1,7 @@
 // components/AuthHeader.js - Reusable authentication header
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 export default function AuthHeader() {
   const { data: session, status } = useSession();
@@ -41,7 +42,9 @@ export default function AuthHeader() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">LastFriends</h1>
+              <Link href="/" className="text-xl font-semibold text-gray-900 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 rounded">
+                LastFriends
+              </Link>
             </div>
             <div className="animate-pulse bg-gray-200 h-8 w-20 rounded"></div>
           </div>
@@ -55,7 +58,9 @@ export default function AuthHeader() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <h1 className="text-xl font-semibold text-gray-900">LastFriends</h1>
+            <Link href="/" className="text-xl font-semibold text-gray-900 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 rounded">
+              LastFriends
+            </Link>
           </div>
 
           <div className="flex items-center space-x-4">
@@ -99,7 +104,7 @@ export default function AuthHeader() {
                     <button
                       onClick={() => {
                         setIsMenuOpen(false);
-                        // Add navigation to profile if needed
+                        window.location.href = '/profile';
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center"
                     >

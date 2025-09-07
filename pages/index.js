@@ -14,8 +14,21 @@ export default function HomePage() {
     const { login, source, user, error: urlError, message } = router.query;
 
     if (login === 'success' && source === 'spotify') {
-      setSuccess(`Successfully connected to Spotify! Welcome, ${user || 'User'}.`);
-      router.replace('/', undefined, { shallow: true });
+      // Fetch display name from session for a personalized greeting
+      (async () => {
+        try {
+          const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+          const me = await res.json().catch(() => ({}));
+          const display = me.displayName || me.username || user || 'User';
+          setSuccess(`Successfully connected to Spotify! Welcome, ${display}.`);
+          // Notify children to re-check auth (race-safe)
+          window.dispatchEvent(new Event('spotify-auth-ready'));
+        } catch (e) {
+          setSuccess(`Successfully connected to Spotify! Welcome, ${user || 'User'}.`);
+        } finally {
+          router.replace('/', undefined, { shallow: true });
+        }
+      })();
     }
 
     if (urlError) {
@@ -105,10 +118,10 @@ export default function HomePage() {
         {/* Header */}
         <div className="text-center mb-12 fade-in-up">
           <h1 className="text-5xl font-bold gradient-text mb-4">
-            LastFriends
+            LastFriends<span className="text-green-500">.</span>
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Compare music compatibility between Last.fm and Spotify users or discover cross-platform musical connections
+            Compare music compatibility between Last.fm and Spotify users and discover musical connections
           </p>
         </div>
 
@@ -206,7 +219,7 @@ export default function HomePage() {
                   Your data is processed securely and never stored permanently or shared with third parties
                 </p>
               </div>
-            </div>
+          </div>
           </div>
         </div>
 
@@ -249,6 +262,7 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
     </Layout>
   );
 }

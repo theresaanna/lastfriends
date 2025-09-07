@@ -324,14 +324,40 @@ export default async function handler(req, res) {
 
 // Helper function to format user data consistently
 function formatUserData(userData, genres, service) {
+  // Normalize image by service
+  let imageUrl = '';
+  if (service === 'lastfm') {
+    const imgs = userData?.userInfo?.image;
+    if (Array.isArray(imgs)) {
+      const preference = ['mega', 'extralarge', 'large', 'medium', 'small'];
+      for (const size of preference) {
+        const match = imgs.find(i => (i?.size === size) && i?.['#text']);
+        if (match && match['#text']) { imageUrl = match['#text']; break; }
+      }
+      if (!imageUrl) {
+        const nonEmpty = imgs.map(i => i?.['#text']).filter(Boolean);
+        imageUrl = nonEmpty.length > 0 ? nonEmpty[nonEmpty.length - 1] : '';
+      }
+    } else if (typeof imgs === 'string') {
+      imageUrl = imgs;
+    }
+  } else {
+    imageUrl = userData?.userInfo?.image || '';
+  }
+
   return {
     name: userData.userInfo.name,
     realname: userData.userInfo.realname || '',
     playcount: parseInt(userData.userInfo.playcount) || 0,
-    artistCount: parseInt(userData.userInfo.artistCount) || 0,
-    trackCount: parseInt(userData.userInfo.trackCount) || 0,
+    // Prefer derived counts from fetched lists; fallback to any provided totals
+    artistCount: (Array.isArray(userData.topArtists) && userData.topArtists.length > 0)
+      ? userData.topArtists.length
+      : (parseInt(userData.userInfo.artistCount) || 0),
+    trackCount: (Array.isArray(userData.topTracks) && userData.topTracks.length > 0)
+      ? userData.topTracks.length
+      : (parseInt(userData.userInfo.trackCount) || 0),
     url: userData.userInfo.url,
-    image: userData.userInfo.image || '',
+    image: imageUrl,
     topArtists: userData.topArtists.slice(0, 50),
     topTracks: userData.topTracks.slice(0, 50),
     genres: genres,

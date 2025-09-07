@@ -1,5 +1,6 @@
 // components/EnhancedInputForm.js - Refactored for mixed comparisons
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { signIn } from 'next-auth/react';
 
 const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
   const [formData, setFormData] = useState({
@@ -20,14 +21,20 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
   const [spotifyUserInfo, setSpotifyUserInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Check Spotify authentication status on component mount
+  const retryScheduledRef = useRef(false);
+
+  // Check Spotify authentication status on component mount and when app dispatches auth-ready
   useEffect(() => {
     checkSpotifyAuth();
+
+    const handler = () => checkSpotifyAuth();
+    window.addEventListener('spotify-auth-ready', handler);
+    return () => window.removeEventListener('spotify-auth-ready', handler);
   }, []);
 
-  const checkSpotifyAuth = async () => {
+  const checkSpotifyAuth = async (withRetry = true) => {
     try {
-      const response = await fetch('/api/auth/me');
+      const response = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
       const data = await response.json();
 
       if (data.authenticated && data.dataSource === 'spotify') {
@@ -35,6 +42,13 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
         setSpotifyUserInfo(data);
       } else {
         setSpotifyAuthStatus('not_authenticated');
+        // Race condition: secure session may be created milliseconds after mount
+        if (withRetry && !retryScheduledRef.current) {
+          retryScheduledRef.current = true;
+          setTimeout(() => {
+            checkSpotifyAuth(false);
+          }, 800);
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -44,14 +58,10 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
 
   const initiateSpotifyLogin = async () => {
     try {
-      const response = await fetch('/api/auth/spotify/login');
-      const data = await response.json();
-
-      if (data.authUrl) {
-        window.location.href = data.authUrl;
-      } else {
-        console.error('Failed to get auth URL');
-      }
+      // Use NextAuth to sign in with Spotify; the AuthHeader will bridge a secure session
+      await signIn('spotify', {
+        callbackUrl: '/?login=success&source=spotify'
+      });
     } catch (error) {
       console.error('Failed to start Spotify authentication:', error);
     }
@@ -135,7 +145,21 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
   }, [formData.user2, formData.user2Service]);
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Build next form data with single state update
+    setFormData(prev => {
+      const next = { ...prev, [field]: value };
+
+      // Enforce single-Spotify selection: if one side selects Spotify, the other is forced to Last.fm
+      if (field === 'user1Service' && value === 'spotify' && prev.user2Service === 'spotify') {
+        next.user2Service = 'lastfm';
+        next.user2 = '';
+      }
+      if (field === 'user2Service' && value === 'spotify' && prev.user1Service === 'spotify') {
+        next.user1Service = 'lastfm';
+        next.user1 = '';
+      }
+      return next;
+    });
 
     // Reset validation when service changes
     if (field === 'user1Service') {
@@ -143,7 +167,6 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
         ...prev,
         user1: { status: 'idle', message: '', profile: null }
       }));
-      setFormData(prev => ({ ...prev, user1: '' }));
     }
 
     if (field === 'user2Service') {
@@ -151,7 +174,6 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
         ...prev,
         user2: { status: 'idle', message: '', profile: null }
       }));
-      setFormData(prev => ({ ...prev, user2: '' }));
     }
 
     // Reset validation when username changes
@@ -274,12 +296,13 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
                 </button>
                 <button
                   type="button"
+                  disabled={formData.user2Service === 'spotify'}
                   onClick={() => handleInputChange('user1Service', 'spotify')}
                   className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
                     formData.user1Service === 'spotify'
                       ? 'bg-green-50 border-green-200 text-green-700'
                       : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                  }`}
+                  } ${formData.user2Service === 'spotify' ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span>🎧</span>
                   <span>Spotify</span>
@@ -346,12 +369,13 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
                 </button>
                 <button
                   type="button"
+                  disabled={formData.user1Service === 'spotify'}
                   onClick={() => handleInputChange('user2Service', 'spotify')}
                   className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border transition-colors ${
                     formData.user2Service === 'spotify'
                       ? 'bg-green-50 border-green-200 text-green-700'
                       : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
-                  }`}
+                  } ${formData.user1Service === 'spotify' ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span>🎧</span>
                   <span>Spotify</span>
@@ -445,7 +469,7 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
             {isSubmitting ? (
               <span className="flex items-center justify-center space-x-2">
                 <span className="animate-spin">⟳</span>
-                <span>Analyzing Compatibility...</span>
+                <span>Loading user listening data...</span>
               </span>
             ) : (
               'Compare Music Tastes'
@@ -461,15 +485,6 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="mt-8 text-center">
-        <p className="text-sm text-red-800">
-          Made by <a href="https://last.fm/user/superexciting" className="hover:underline">Theresa</a>.
-        </p>
-        <p className="text-sm text-gray-500">
-          Open Source on <a href="https://github.com/theresaanna/lastfriends" className="hover:underline">Github: theresaanna/lastfriends</a>
-        </p>
-      </footer>
     </div>
   );
 };

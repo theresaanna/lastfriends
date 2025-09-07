@@ -18,12 +18,21 @@ import {
 } from '../components/TabContent.js';
 
 export default function ComparePage() {
+  const router = useRouter();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Initialize active tab from URL query
+  useEffect(() => {
+    if (!router.isReady) return;
+    const { tab } = router.query;
+    if (typeof tab === 'string' && ['overview','artists','tracks','genres','recommendations'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [router.isReady, router.query.tab]);
   const [backgroundJobs, setBackgroundJobs] = useState([]);
-  const router = useRouter();
 
   // Effect to handle route changes and fetch data
   useEffect(() => {
@@ -57,7 +66,17 @@ export default function ComparePage() {
       user2Service: user2Service || 'lastfm',
       mixedComparison: mixedComparison === 'true'
     });
-  }, [router.isReady, router.query]);
+  // Only refetch when data-bearing params change (not when 'tab' changes)
+  }, [
+    router.isReady,
+    router.query.user1,
+    router.query.user2,
+    router.query.period,
+    router.query.limit,
+    router.query.user1Service,
+    router.query.user2Service,
+    router.query.mixedComparison
+  ]);
 
   // Fetch comparison data from API
   const fetchComparisonData = async (params) => {
@@ -120,27 +139,9 @@ export default function ComparePage() {
     }
   };
 
-  // Loading state
+  // Loading state: render nothing (pre-change behavior)
   if (loading) {
-    return (
-      <Layout>
-        <div className="py-8">
-          <div className="text-center mb-8 fade-in-up">
-            <h1 className="text-4xl font-bold gradient-text mb-4">Analyzing Music Compatibility</h1>
-            <div className="flex justify-center mb-6">
-              <div className="w-12 h-12 border-4 border-lastfm-red border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <p className="text-gray-600 text-lg">Fetching data and calculating overlaps...</p>
-            <p className="text-gray-600 text-md">(This might take a minute or two.)</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <UserProfile user={{}} isLoading={true} />
-            <UserProfile user={{}} isLoading={true} />
-          </div>
-        </div>
-      </Layout>
-    );
+    return null;
   }
 
   // Error state
@@ -226,13 +227,15 @@ export default function ComparePage() {
     <Layout>
       <div className="py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8 fade-in-up">
-          <button
-            onClick={() => router.push('/')}
-            className="btn-secondary"
-          >
-            ← New Comparison
-          </button>
+        <div className="grid grid-cols-3 items-center mb-8 fade-in-up">
+          <div className="justify-self-start">
+            <button
+              onClick={() => router.push('/')}
+              className="btn-secondary"
+            >
+              ← New Comparison
+            </button>
+          </div>
 
           <div className="text-center">
             <h1 className="text-3xl font-bold gradient-text">Music Compatibility</h1>
@@ -242,13 +245,13 @@ export default function ComparePage() {
               </p>
             )}
           </div>
-          <div></div>
+          <div className="justify-self-end"></div>
         </div>
 
         {/* User Profiles */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="relative">
-            <UserProfile user={users.user1} />
+            <UserProfile user={users.user1} highlightSpotifyPlaycount={user1Service === 'spotify'} />
             <div className={`absolute top-2 right-2 text-white text-xs px-2 py-1 rounded-full ${
               user1Service === 'spotify' ? 'bg-green-500' : 'bg-red-500'
             }`}>
@@ -256,7 +259,7 @@ export default function ComparePage() {
             </div>
           </div>
           <div className="relative">
-            <UserProfile user={users.user2} />
+            <UserProfile user={users.user2} highlightSpotifyPlaycount={user2Service === 'spotify'} />
             <div className={`absolute top-2 right-2 text-white text-xs px-2 py-1 rounded-full ${
               user2Service === 'spotify' ? 'bg-green-500' : 'bg-red-500'
             }`}>
@@ -326,8 +329,16 @@ export default function ComparePage() {
             <nav className="flex overflow-x-auto">
               {tabs.map((tab) => (
                 <button
+                  type="button"
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setActiveTab(tab.id);
+                    // Persist tab in URL without full reload
+                    const nextQuery = { ...router.query, tab: tab.id };
+                    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+                  }}
                   className={`px-6 py-4 text-sm font-semibold transition-all duration-200 flex items-center gap-2 whitespace-nowrap relative ${
                     activeTab === tab.id
                       ? 'bg-gradient-lastfm text-white border-b-2 border-lastfm-red shadow-lg'
@@ -367,14 +378,6 @@ export default function ComparePage() {
               📋 Copy Link to Share
             </button>
           </div>
-          <footer className="mt-6">
-            <p className="text-sm text-red-800">
-              Made by <a href="https://last.fm/user/superexciting">Theresa</a>.
-            </p>
-            <p className="text-sm text-gray-500">
-              Open Source on <a href="https://github.com/theresaanna/lastfriends">Github: theresaanna/lastfriends</a>
-            </p>
-          </footer>
         </div>
       </div>
     </Layout>

@@ -1,4 +1,5 @@
 // components/MusicCards.js
+import { useState } from 'react';
 
 // Artist/Track card component
 export function MusicCard({ item, type, users, showPlaycounts = true }) {
@@ -46,7 +47,7 @@ export function MusicCard({ item, type, users, showPlaycounts = true }) {
 }
 
 // User profile card
-export function UserProfile({ user, isLoading = false }) {
+export function UserProfile({ user, isLoading = false, highlightSpotifyPlaycount = false }) {
   if (isLoading) {
     return (
       <div className="card-elevated p-6 animate-pulse">
@@ -68,14 +69,26 @@ export function UserProfile({ user, isLoading = false }) {
     ? 'inline-block mt-4 text-green-600 hover:text-green-700 text-sm font-semibold transition-colors duration-200'
     : 'inline-block mt-4 text-lastfm-red hover:text-lastfm-red-dark text-sm font-semibold transition-colors duration-200';
 
+  // State-driven avatar: only one element rendered to preserve original layout height
+  const [showImage, setShowImage] = useState(Boolean(user?.image));
+
+  // Compute playcount styling
+  const playcountClass = isSpotify && highlightSpotifyPlaycount
+    ? 'font-bold text-green-600 text-lg'
+    : 'font-bold gradient-text text-lg';
+
   return (
     <div className="card-elevated p-6 fade-in-up hover:shadow-lg transition-all duration-300">
       <div className="flex flex-col items-center space-y-4">
-        {user.image ? (
+        {showImage ? (
           <img
             src={user.image}
             alt={user.name}
             className="w-24 h-24 rounded-full object-cover shadow-soft ring-4 ring-white"
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            decoding="async"
+            onError={() => setShowImage(false)}
           />
         ) : (
           <div className={`w-24 h-24 ${isSpotify ? 'bg-green-500' : 'bg-gradient-lastfm'} rounded-full flex items-center justify-center shadow-soft ring-4 ring-white`}>
@@ -92,7 +105,11 @@ export function UserProfile({ user, isLoading = false }) {
           )}
 
           <div className="mt-3 space-y-1 text-sm text-gray-600">
-            <p><span className="font-bold gradient-text text-lg">{user.playcount.toLocaleString()}</span> total scrobbles</p>
+            <p>
+              <span className={playcountClass}>{user.playcount.toLocaleString()}</span>
+              {" "}
+              {isSpotify ? 'plays' : 'total scrobbles'}
+            </p>
             <p className="text-xs">{user.artistCount.toLocaleString()} artists • {user.trackCount.toLocaleString()} tracks</p>
           </div>
 
