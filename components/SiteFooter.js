@@ -11,7 +11,7 @@ export default function SiteFooter() {
         <p className="text-sm text-gray-500 mt-1">
           Open Source on <a href="https://github.com/theresaanna/lastfriends" className="hover:underline">Github: theresaanna/lastfriends</a>
         </p>
-          <p className="text-sm text-red-900 mt-1">
+          <p className="text-sm text-green-500 mt-1">
           Hire me, please: <a href="https://theresasumma.com" className="hover:underline">theresasumma.com</a>
         </p>
         <p className="text-xs text-gray-400 mt-2">
