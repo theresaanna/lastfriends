@@ -62,6 +62,12 @@ export function UserProfile({ user, isLoading = false }) {
     );
   }
 
+  const isSpotify = (user?.dataSource || '').toLowerCase() === 'spotify';
+  const linkText = isSpotify ? 'View on Spotify →' : 'View on Last.fm →';
+  const linkClass = isSpotify
+    ? 'inline-block mt-4 text-green-600 hover:text-green-700 text-sm font-semibold transition-colors duration-200'
+    : 'inline-block mt-4 text-lastfm-red hover:text-lastfm-red-dark text-sm font-semibold transition-colors duration-200';
+
   return (
     <div className="card-elevated p-6 fade-in-up hover:shadow-lg transition-all duration-300">
       <div className="flex flex-col items-center space-y-4">
@@ -72,7 +78,7 @@ export function UserProfile({ user, isLoading = false }) {
             className="w-24 h-24 rounded-full object-cover shadow-soft ring-4 ring-white"
           />
         ) : (
-          <div className="w-24 h-24 bg-gradient-lastfm rounded-full flex items-center justify-center shadow-soft ring-4 ring-white">
+          <div className={`w-24 h-24 ${isSpotify ? 'bg-green-500' : 'bg-gradient-lastfm'} rounded-full flex items-center justify-center shadow-soft ring-4 ring-white`}>
             <span className="text-white text-2xl font-bold">
               {user.name.charAt(0).toUpperCase()}
             </span>
@@ -94,9 +100,9 @@ export function UserProfile({ user, isLoading = false }) {
             href={user.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block mt-4 text-lastfm-red hover:text-lastfm-red-dark text-sm font-semibold transition-colors duration-200"
+            className={linkClass}
           >
-            View on Last.fm →
+            {linkText}
           </a>
         </div>
       </div>

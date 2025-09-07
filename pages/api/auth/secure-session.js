@@ -1,5 +1,5 @@
-// pages/api/auth/secure-session.js - API to create secure session cookie
-import { getServerSession } from 'next-auth/next';
+// pages/api/auth/secure-session.js - Create secure session cookie from NextAuth token
+import { getToken } from 'next-auth/jwt';
 import { SecureSessionManager } from '../../../lib/auth/nextauth-adapter.js';
 import { serialize } from 'cookie';
 
@@ -9,65 +9,51 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get NextAuth session from server side
-    const session = await getServerSession(req, res, {
-      // You'll need to import your NextAuth config here
-      // For now, we'll check if user is authenticated differently
-    });
+    // Get NextAuth JWT token from request (supports both dev and prod cookies)
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-    // Alternative: Check for NextAuth JWT token in cookies
-    const cookies = req.headers.cookie || '';
-    const nextAuthSession = cookies.includes('next-auth.session-token') ||
-                           cookies.includes('__Secure-next-auth.session-token');
-
-    if (!nextAuthSession) {
+    if (!token) {
       return res.status(401).json({ error: 'Not authenticated with NextAuth' });
     }
 
-    // For now, we'll create the session with basic user data
-    // In a real implementation, you'd get this from NextAuth
-    const mockSession = {
+    // Build session data from NextAuth token
+    const session = {
       user: {
-        id: 'temp-user-id', // You'll get this from NextAuth
-        email: 'user@example.com', // You'll get this from NextAuth
-        name: 'User Name', // You'll get this from NextAuth
-        image: 'https://example.com/avatar.jpg' // You'll get this from NextAuth
-      }
+        id: token.sub || token.email,
+        email: token.email,
+        name: token.name,
+        image: token.picture,
+      },
     };
 
-    const mockToken = {
-      accessToken: 'mock-access-token', // You'll get this from NextAuth
-      refreshToken: 'mock-refresh-token', // You'll get this from NextAuth
-      accessTokenExpires: Date.now() + 3600000 // 1 hour
+    const tokenData = {
+      accessToken: token.accessToken,
+      refreshToken: token.refreshToken || 'no-refresh-token',
+      accessTokenExpires: token.accessTokenExpires || (Date.now() + 3600000),
     };
 
-    // Create secure session
-    const sessionToken = await SecureSessionManager.createSecureSession(
-      mockSession,
-      mockToken
-    );
+    // Create secure session and set cookie
+    const sessionToken = await SecureSessionManager.createSecureSession(session, tokenData);
 
-    // Set secure session cookie
-// Update cookie settings in secure-session APIs
     const sessionCookie = serialize('session_token', sessionToken, {
       httpOnly: true,
-      secure: true, // MUST be true in production
-      sameSite: 'strict', // More secure for production
-      maxAge: 30 * 24 * 60 * 60,
-      path: '/'
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60, // 30 days
+      path: '/',
     });
 
     res.setHeader('Set-Cookie', sessionCookie);
     res.json({
       success: true,
       message: 'Secure session created',
-      sessionToken: sessionToken.substring(0, 8) + '...' // Just show first 8 chars for debugging
+      sessionToken: sessionToken.substring(0, 8) + '...',
     });
   } catch (error) {
     console.error('Secure session creation failed:', error);
     res.status(500).json({
       error: 'Failed to create secure session',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 }

@@ -1,160 +1,251 @@
-// pages/index.js
-import { useState } from 'react';
+// pages/index.js - Updated with mixed comparison support
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Analytics } from "@vercel/analytics/next"
 import Layout from '../components/Layout';
+import EnhancedInputForm from '../components/EnhancedInputForm';
 
-export default function Home() {
-  const [user1, setUser1] = useState('');
-  const [user2, setUser2] = useState('');
-  const [period, setPeriod] = useState('overall');
+export default function HomePage() {
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const router = useRouter();
 
-  const handleCompare = () => {
-    setError('');
+  // Handle URL parameters for login feedback
+  useEffect(() => {
+    const { login, source, user, error: urlError, message } = router.query;
 
-    if (!user1.trim() || !user2.trim()) {
-      setError('Please enter both usernames');
-      return;
+    if (login === 'success' && source === 'spotify') {
+      setSuccess(`Successfully connected to Spotify! Welcome, ${user || 'User'}.`);
+      router.replace('/', undefined, { shallow: true });
     }
 
-    if (user1.toLowerCase() === user2.toLowerCase()) {
-      setError('Please enter two different usernames');
-      return;
+    if (urlError) {
+      const errorMessages = {
+        oauth_error: 'Spotify authentication failed. Please try again.',
+        missing_code: 'Authentication code missing. Please try again.',
+        session_expired: 'Authentication session expired. Please try again.',
+        invalid_session: 'Invalid authentication session. Please try again.',
+        state_mismatch: 'Security validation failed. Please try again.',
+        auth_failed: message ? decodeURIComponent(message) : 'Authentication failed. Please try again.'
+      };
+
+      setError(errorMessages[urlError] || 'An error occurred during authentication.');
+      router.replace('/', undefined, { shallow: true });
     }
+  }, [router.query]);
 
-    const url = `/compare?user1=${encodeURIComponent(user1.trim())}&user2=${encodeURIComponent(user2.trim())}&period=${period}`;
-    router.push(url);
-  };
+  const handleFormSubmit = async (formData) => {
+    try {
+      setError('');
+      setSuccess('');
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleCompare();
+      console.log('Form submission data:', formData);
+
+      // Handle mixed comparison submission
+      const response = await fetch('/api/compare', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          user1: formData.user1,
+          user2: formData.user2,
+          user1Service: formData.user1Service,
+          user2Service: formData.user2Service,
+          period: formData.period || 'overall',
+          dataSource: 'mixed'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+
+        if (errorData.code === 'SPOTIFY_AUTH_REQUIRED') {
+          setError('Please connect your Spotify account first.');
+          return;
+        }
+
+        if (errorData.code === 'TOKEN_REFRESH_FAILED') {
+          setError('Your Spotify session has expired. Please reconnect your account.');
+          return;
+        }
+
+        if (errorData.code === 'SAME_SPOTIFY_USER') {
+          setError('Cannot compare the same Spotify user with themselves. Please use Last.fm for one of the users.');
+          return;
+        }
+
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Navigate to results page with comparison data
+      // Use original form values to avoid display name issues
+      const params = new URLSearchParams({
+        user1: formData.user1,
+        user2: formData.user2,
+        user1Service: formData.user1Service,
+        user2Service: formData.user2Service,
+        period: formData.period || 'overall',
+        mixedComparison: (data.metadata?.mixedSources || false).toString()
+      });
+
+      router.push(`/compare?${params.toString()}`);
+
+    } catch (error) {
+      console.error('Form submission error:', error);
+      setError(error.message || 'An error occurred. Please try again.');
     }
   };
 
   return (
     <Layout>
-      <Analytics />
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="w-full max-w-lg">
-          {/* Header */}
-          <div className="text-center mb-8 fade-in-up">
-            <div className="mb-4">
-              <h1 className="text-4xl font-bold gradient-text mb-2">
-                Last.fm Music Matcher
-              </h1>
-              <div className="w-20 h-1 bg-gradient-lastfm mx-auto rounded-full"></div>
+      <div className="py-8">
+        {/* Header */}
+        <div className="text-center mb-12 fade-in-up">
+          <h1 className="text-5xl font-bold gradient-text mb-4">
+            LastFriends
+          </h1>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Compare music compatibility between Last.fm and Spotify users or discover cross-platform musical connections
+          </p>
+        </div>
+
+        {/* Status Messages */}
+        {error && (
+          <div className="max-w-2xl mx-auto mb-6">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 fade-in-up">
+              <div className="flex items-center">
+                <span className="text-red-500 mr-2">⚠</span>
+                <p className="text-red-700">{error}</p>
+              </div>
             </div>
-            <p className="text-gray-600 text-lg">
-              Compare music tastes and discover your compatibility!
-            </p>
           </div>
+        )}
 
-          {/* Form Card */}
-          <div className="card-elevated p-8 fade-in-up">
-            <div className="space-y-6">
-              {/* User 1 Input */}
-              <div>
-                <label htmlFor="user1" className="block text-sm font-semibold text-gray-700 mb-2">
-                  First Last.fm Username
-                </label>
-                <input
-                  id="user1"
-                  type="text"
-                  value={user1}
-                  onChange={(e) => setUser1(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Enter username..."
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                  className="input-field"
-                />
+        {success && (
+          <div className="max-w-2xl mx-auto mb-6">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 fade-in-up">
+              <div className="flex items-center">
+                <span className="text-green-500 mr-2">✓</span>
+                <p className="text-green-700">{success}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Enhanced Input Form */}
+        <div className="fade-in-up" style={{ animationDelay: '200ms' }}>
+          <EnhancedInputForm
+            onSubmit={handleFormSubmit}
+            onPreviewUser={(userData) => {
+              console.log('User preview:', userData);
+            }}
+          />
+        </div>
+
+        {/* Features Section */}
+        <div className="mt-16 fade-in-up" style={{ animationDelay: '400ms' }}>
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-3xl font-bold text-center text-gray-900 mb-8">
+              Cross-Platform Music Compatibility
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Last.fm vs Last.fm */}
+              <div className="card p-6 text-center hover:shadow-lg transition-all duration-300">
+                <div className="text-3xl mb-4">🎵</div>
+                <h3 className="text-xl font-semibold mb-2">Last.fm vs Last.fm</h3>
+                <p className="text-gray-600">
+                  Compare listening histories between two Last.fm users to find shared musical interests
+                </p>
               </div>
 
-              {/* User 2 Input */}
-              <div>
-                <label htmlFor="user2" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Second Last.fm Username
-                </label>
-                <input
-                  id="user2"
-                  type="text"
-                  value={user2}
-                  onChange={(e) => setUser2(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="Enter username..."
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                  className="input-field"
-                />
+              {/* Mixed Comparisons */}
+              <div className="card p-6 text-center hover:shadow-lg transition-all duration-300 bg-gradient-to-br from-red-50 to-green-50">
+                <div className="text-3xl mb-4">🎵🎧</div>
+                <h3 className="text-xl font-semibold mb-2">Cross-Platform</h3>
+                <p className="text-gray-600">
+                  Mix and match! Compare a Last.fm user with a Spotify user for cross-platform compatibility
+                </p>
               </div>
 
-              {/* Period Select */}
-              <div>
-                <label htmlFor="period" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Time Period
-                </label>
-                <select
-                  id="period"
-                  value={period}
-                  onChange={(e) => setPeriod(e.target.value)}
-                  className="select-field"
-                >
-                  <option value="overall">All Time</option>
-                  <option value="7day">Last 7 Days</option>
-                  <option value="1month">Last Month</option>
-                  <option value="3month">Last 3 Months</option>
-                  <option value="6month">Last 6 Months</option>
-                  <option value="12month">Last Year</option>
-                </select>
+              {/* Compatibility */}
+              <div className="card p-6 text-center hover:shadow-lg transition-all duration-300">
+                <div className="text-3xl mb-4">💫</div>
+                <h3 className="text-xl font-semibold mb-2">Smart Analysis</h3>
+                <p className="text-gray-600">
+                  Get detailed compatibility scores and discover new music based on shared tastes
+                </p>
               </div>
 
-              {/* Error Message */}
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 fade-in-up">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm text-red-800 font-medium">{error}</p>
-                    </div>
-                  </div>
+              {/* Genre Analysis */}
+              <div className="card p-6 text-center hover:shadow-lg transition-all duration-300">
+                <div className="text-3xl mb-4">🎨</div>
+                <h3 className="text-xl font-semibold mb-2">Genre Breakdown</h3>
+                <p className="text-gray-600">
+                  Explore genre preferences across different platforms and see how they align
+                </p>
+              </div>
+
+              {/* Recommendations */}
+              <div className="card p-6 text-center hover:shadow-lg transition-all duration-300">
+                <div className="text-3xl mb-4">✨</div>
+                <h3 className="text-xl font-semibold mb-2">Smart Recommendations</h3>
+                <p className="text-gray-600">
+                  Get personalized music recommendations based on cross-platform compatibility analysis
+                </p>
+              </div>
+
+              {/* Data Privacy */}
+              <div className="card p-6 text-center hover:shadow-lg transition-all duration-300">
+                <div className="text-3xl mb-4">🔒</div>
+                <h3 className="text-xl font-semibold mb-2">Privacy First</h3>
+                <p className="text-gray-600">
+                  Your data is processed securely and never stored permanently or shared with third parties
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* How It Works */}
+        <div className="mt-16 fade-in-up" style={{ animationDelay: '600ms' }}>
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-3xl font-bold text-gray-900 mb-8">How It Works</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="space-y-4">
+                <div className="w-12 h-12 bg-gradient-lastfm rounded-full flex items-center justify-center mx-auto">
+                  <span className="text-white font-bold text-xl">1</span>
                 </div>
-              )}
+                <h3 className="text-lg font-semibold">Choose Your Users</h3>
+                <p className="text-gray-600">
+                  Select any combination: Last.fm + Last.fm, or Last.fm + Spotify for cross-platform analysis
+                </p>
+              </div>
 
-              {/* Submit Button */}
-              <button
-                onClick={handleCompare}
-                className="btn-lastfm w-full text-lg py-4"
-              >
-                Compare Music Taste
-              </button>
+              <div className="space-y-4">
+                <div className="w-12 h-12 bg-gradient-lastfm rounded-full flex items-center justify-center mx-auto">
+                  <span className="text-white font-bold text-xl">2</span>
+                </div>
+                <h3 className="text-lg font-semibold">Analyze & Compare</h3>
+                <p className="text-gray-600">
+                  We analyze listening data, top artists, tracks, and genres across different platforms
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="w-12 h-12 bg-gradient-lastfm rounded-full flex items-center justify-center mx-auto">
+                  <span className="text-white font-bold text-xl">3</span>
+                </div>
+                <h3 className="text-lg font-semibold">Discover Compatibility</h3>
+                <p className="text-gray-600">
+                  Get compatibility scores, shared interests, and recommendations regardless of platform
+                </p>
+              </div>
             </div>
-          </div>
-
-          {/* Footer Info */}
-          <div className="mt-8 text-center space-y-2 fade-in-up">
-            <p className="text-sm text-gray-500">
-              <strong>Note:</strong> Both users must have public Last.fm profiles
-            </p>
-              <p className="text-xs text-gray-400">
-              Analyzes top artists and tracks to find compatibility and shared favorites
-            </p>
-              <p className="text-sm text-red-800">
-                  Made by <a href="https://last.fm/user/superexciting">Theresa</a>.
-              </p>
-              <p className="text-sm text-gray-500">
-                  Open Source on <a href="https://github.com/theresaanna/lastfriends">Github: theresaanna/lastfriends</a>
-              </p>
           </div>
         </div>
       </div>

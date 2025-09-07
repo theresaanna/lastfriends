@@ -8,7 +8,8 @@ export class ApiError extends Error {
   }
 }
 
-export async function compareUsers(user1, user2, period = 'overall') {
+export const compareUsers = async (user1, user2, period, options = {}) => {
+  const { limit = 50 } = options;
   try {
     const response = await fetch('/api/compare', {
       method: 'POST',

@@ -1,7 +1,12 @@
-const { createServer } = require('https');
-const { parse } = require('url');
-const next = require('next');
-const fs = require('fs');
+import { createServer } from 'https';
+import { parse } from 'url';
+import next from 'next';
+import fs from 'fs';
+import { config as dotenvConfig } from 'dotenv';
+
+// Load environment variables from .env files early (.env and .env.local)
+dotenvConfig();
+dotenvConfig({ path: '.env.local' });
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'localhost';

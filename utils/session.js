@@ -1,10 +1,12 @@
-// utils/session.js - JWT-based session management (no in-memory storage)
+// utils/session.js - Unified session access (NextAuth secure-session or legacy JWT)
 import { SignJWT, jwtVerify } from 'jose';
+import { getSession as getSecureStoreSession } from '../lib/auth/session.js';
+import { decryptToken } from '../lib/auth/encryption.js';
 
 const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret-key');
 
 export class SessionManager {
-  // Create a new session token with embedded user data
+  // Create a new session token with embedded user data (legacy JWT flow)
   static async createSession(userData) {
     const sessionId = crypto.randomUUID();
     const sessionData = {
@@ -26,7 +28,7 @@ export class SessionManager {
     return { sessionId, token };
   }
 
-  // Get session data directly from JWT token
+  // Get session data directly from JWT token (legacy JWT flow)
   static async getSession(token) {
     try {
       console.log('Verifying session token...');
@@ -89,13 +91,60 @@ export class SessionManager {
   }
 }
 
-// Utility function to get session from request
+// Utility function to get session from request (supports both flows)
 export async function getSessionFromRequest(req) {
-  const token = req.cookies?.session || req.headers.authorization?.replace('Bearer ', '');
-  if (!token) {
+  // 1) Legacy JWT cookie named "session" or Bearer token
+  const jwtToken = req.cookies?.session || req.headers.authorization?.replace('Bearer ', '');
+  if (jwtToken) {
+    const legacy = await SessionManager.getSession(jwtToken);
+    if (legacy) return legacy;
+  }
+
+  // 2) Secure session cookie from NextAuth bridge (preferred)
+  const cookies = req.cookies || {};
+  const secureToken = cookies.session_token_debug || cookies.session_token;
+
+  if (!secureToken) {
     console.log('No session token found in request');
     return null;
   }
 
-  return await SessionManager.getSession(token);
+  // Load session from secure store
+  const secureSession = await getSecureStoreSession(secureToken);
+  if (!secureSession) return null;
+
+  // Decrypt tokens if possible; fall back to raw
+  let accessToken = secureSession.accessToken;
+  let refreshToken = secureSession.refreshToken;
+  try {
+    accessToken = await decryptToken(secureSession.accessToken);
+  } catch (e) {
+    console.warn('Access token decrypt failed, using raw token');
+  }
+  try {
+    refreshToken = await decryptToken(secureSession.refreshToken);
+  } catch (e) {
+    console.warn('Refresh token decrypt failed, using raw token');
+  }
+
+  // Return a compatibility shape expected by existing APIs
+  return {
+    dataSource: 'spotify',
+    username: secureSession.userEmail || secureSession.userId,
+    displayName: secureSession.userName || secureSession.userEmail || 'User',
+    email: secureSession.userEmail,
+    spotifyId: null,
+    country: null,
+    followers: null,
+    product: null,
+    images: [],
+    tokens: {
+      accessToken,
+      refreshToken,
+      expiresAt: secureSession.tokenExpiry,
+      scope: undefined,
+    },
+    createdAt: secureSession.createdAt,
+    lastAccessed: secureSession.lastAccessed,
+  };
 }

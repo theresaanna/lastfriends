@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "tunnel": "cloudflared tunnel --url https://localhost:3001",
+    "tunnel:named": "echo 'See README for named tunnel setup instructions'",
     "worker": "node workers/trackCollector.mjs"
   },
   "dependencies": {

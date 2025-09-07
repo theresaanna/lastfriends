@@ -1,5 +1,7 @@
-// pages/api/compare.js - Enhanced with Redis + Progressive Genre Loading
-import { getUserData, getArtistInfo, LastFMError } from '../../utils/lastfm.js';
+// pages/api/compare.js - Enhanced with mixed comparison support
+import { getUserData as getLastFMUserData, getArtistInfo, LastFMError } from '../../utils/lastfm.js';
+import { SpotifyDataAPI, SpotifyError } from '../../utils/spotify.js';
+import { getSessionFromRequest } from '../../utils/session.js';
 import {
   calculateArtistOverlap,
   calculateTrackOverlap,
@@ -10,47 +12,33 @@ import {
 } from '../../utils/overlap.js';
 import { withCache } from '../../utils/cache.js';
 
-// Enhanced cache with Redis support (longer TTL since Redis persists)
-const getCachedComparison = withCache(async (user1, user2, period) => {
-  console.log(`Starting enhanced comparison for ${user1} vs ${user2} (${period})`);
+// Enhanced cache with support for mixed data sources  
+const getCachedComparison = withCache(async (user1, user2, period, user1Service, user2Service, spotifyUserId) => {
+  console.log(`Starting mixed comparison: ${user1} (${user1Service}) vs ${user2} (${user2Service}), period: ${period}, spotifyUserId: ${spotifyUserId}`);
 
-  // Fetch data for both users
+  // Fetch data based on source type (we'll get accessToken fresh each time)
+  const session = global.currentSession; // We'll set this in the main handler
+  const accessToken = session?.tokens?.accessToken;
+  
   const [user1Data, user2Data] = await Promise.all([
-    getUserData(user1, period),
-    getUserData(user2, period)
+    fetchUserDataBySource(user1, period, user1Service, user1Service === 'spotify' ? accessToken : null),
+    fetchUserDataBySource(user2, period, user2Service, user2Service === 'spotify' ? accessToken : null)
   ]);
 
   console.log(`Fetched ${user1Data.topArtists.length} artists for ${user1}, ${user2Data.topArtists.length} for ${user2}`);
 
-  // Progressive genre extraction - first get basic data, then enrich
-  const user1BasicGenres = extractBasicGenresFromArtists(user1Data.topArtists);
-  const user2BasicGenres = extractBasicGenresFromArtists(user2Data.topArtists);
+  // Extract genres based on data source
+  const user1Genres = user1Service === 'spotify'
+    ? SpotifyDataAPI.extractGenresFromSpotifyData(user1Data.topArtists)
+    : await extractLastFMGenres(user1Data.topArtists);
 
-  // Enrich artists with tags for better genre analysis
-  const [user1ArtistsWithTags, user2ArtistsWithTags] = await Promise.all([
-    enrichArtistsWithTags(user1Data.topArtists, 75), // Increased from 30
-    enrichArtistsWithTags(user2Data.topArtists, 75)
-  ]);
+  const user2Genres = user2Service === 'spotify'
+    ? SpotifyDataAPI.extractGenresFromSpotifyData(user2Data.topArtists)
+    : await extractLastFMGenres(user2Data.topArtists);
 
-  // Calculate overlaps with enhanced data
-  const artistOverlap = calculateArtistOverlap(
-    user1Data.topArtists,
-    user2Data.topArtists
-  );
-
-  const trackOverlap = calculateTrackOverlap(
-    user1Data.topTracks,
-    user2Data.topTracks
-  );
-
-  // Extract enhanced genres from enriched artist data
-  const user1EnhancedGenres = extractGenresFromTags(user1ArtistsWithTags);
-  const user2EnhancedGenres = extractGenresFromTags(user2ArtistsWithTags);
-
-  // Fallback to basic genres if enhanced extraction fails
-  const user1Genres = user1EnhancedGenres.length > 0 ? user1EnhancedGenres : user1BasicGenres;
-  const user2Genres = user2EnhancedGenres.length > 0 ? user2EnhancedGenres : user2BasicGenres;
-
+  // Calculate overlaps
+  const artistOverlap = calculateArtistOverlap(user1Data.topArtists, user2Data.topArtists);
+  const trackOverlap = calculateTrackOverlap(user1Data.topTracks, user2Data.topTracks);
   const genreOverlap = calculateGenreOverlap(user1Genres, user2Genres);
 
   // Generate recommendations
@@ -72,66 +60,46 @@ const getCachedComparison = withCache(async (user1, user2, period) => {
     recommendations,
     compatibility,
     metadata: {
-      user1ArtistsEnriched: user1ArtistsWithTags.filter(a => a.tags).length,
-      user2ArtistsEnriched: user2ArtistsWithTags.filter(a => a.tags).length,
-      totalArtistsFetched: user1Data.topArtists.length + user2Data.topArtists.length,
-      cacheSource: 'redis-hybrid'
+      user1Service,
+      user2Service,
+      mixedSources: user1Service !== user2Service,
+      dataSource: user1Service === user2Service ? user1Service : 'mixed',
+      cacheSource: 'hybrid'
     }
   };
-}, 'fullComparison', 1800); // 30 minutes cache (Redis can handle longer TTL)
+}, 'mixedComparison', 1800);
 
-// Helper function to extract basic genres from artist names (immediate fallback)
-function extractBasicGenresFromArtists(artists) {
-  const genreKeywords = {
-    'Electronic': ['electronic', 'techno', 'house', 'edm', 'synth', 'ambient', 'trance', 'dubstep'],
-    'Rock': ['rock', 'metal', 'punk', 'grunge', 'hardcore'],
-    'Pop': ['pop', 'mainstream', 'chart'],
-    'Hip Hop': ['hip hop', 'rap', 'mc', 'hip-hop'],
-    'Jazz': ['jazz', 'blues', 'swing'],
-    'Classical': ['classical', 'orchestra', 'symphony', 'opera'],
-    'Folk': ['folk', 'acoustic', 'country', 'americana'],
-    'Indie': ['indie', 'alternative', 'alt', 'underground'],
-    'R&B': ['r&b', 'soul', 'funk', 'rnb'],
-    'Reggae': ['reggae', 'ska', 'dub']
-  };
-
-  const genreCount = new Map();
-
-  artists.slice(0, 50).forEach(artist => {
-    const artistName = artist.name.toLowerCase();
-    Object.entries(genreKeywords).forEach(([genre, keywords]) => {
-      if (keywords.some(keyword => artistName.includes(keyword))) {
-        const count = genreCount.get(genre) || 0;
-        genreCount.set(genre, count + (parseInt(artist.playcount) || 0));
-      }
+// Helper function to fetch user data based on source
+async function fetchUserDataBySource(username, period, source, accessToken = null) {
+  if (source === 'spotify') {
+    if (!accessToken) {
+      throw new SpotifyError('Spotify access token required', 'NO_TOKEN');
+    }
+    // Note: For Spotify, we can only fetch data for the logged-in user (token owner)
+    // The username parameter is ignored as Spotify API uses the access token
+    const userData = await SpotifyDataAPI.getUserData(accessToken, period);
+    console.log('Spotify user data fetched:', {
+      name: userData.userInfo?.name,
+      id: userData.userInfo?.id,
+      displayName: userData.userInfo?.displayName
     });
-  });
-
-  return Array.from(genreCount.entries())
-    .map(([name, count]) => ({
-      name,
-      count,
-      isBasic: true
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
+    return userData;
+  } else {
+    // Default to Last.fm
+    return await getLastFMUserData(username, period);
+  }
 }
 
-// Enhanced function to enrich artists with tags (with better error handling)
-async function enrichArtistsWithTags(artists, maxArtists = 75) {
-  const artistsToEnrich = artists.slice(0, Math.min(maxArtists, artists.length));
+// Helper function to extract Last.fm genres (existing logic)
+async function extractLastFMGenres(artists) {
+  const artistsToEnrich = artists.slice(0, Math.min(75, artists.length));
   const enrichedArtists = [];
-  let successCount = 0;
-
-  console.log(`Enriching ${artistsToEnrich.length} artists with tags...`);
 
   for (let i = 0; i < artistsToEnrich.length; i++) {
     const artist = artistsToEnrich[i];
     try {
-      // Improved rate limiting with jitter
       if (i > 0) {
-        const delay = 120 + Math.random() * 50; // 120-170ms with jitter
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, 120));
       }
 
       const artistInfo = await getArtistInfo(artist.name, artist.mbid);
@@ -140,54 +108,108 @@ async function enrichArtistsWithTags(artists, maxArtists = 75) {
         tags: artistInfo?.tags || null,
         bio: artistInfo?.bio?.summary || null
       });
-
-      if (artistInfo?.tags) successCount++;
-
-      // Log progress every 25 artists
-      if ((i + 1) % 25 === 0) {
-        console.log(`Enriched ${i + 1}/${artistsToEnrich.length} artists (${successCount} with tags)`);
-      }
     } catch (error) {
       console.warn(`Failed to enrich artist ${artist.name}:`, error.message);
       enrichedArtists.push(artist);
     }
   }
 
-  // Add remaining artists without tags
-  enrichedArtists.push(...artists.slice(artistsToEnrich.length));
-
-  console.log(`Enrichment complete: ${successCount}/${artistsToEnrich.length} artists enriched with tags`);
-  return enrichedArtists;
+  return extractGenresFromTags(enrichedArtists);
 }
 
 export default async function handler(req, res) {
-  // Enhanced cache headers for CDN + Redis
   res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600');
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { user1, user2, period = 'overall' } = req.body;
+  let {
+    user1,
+    user2,
+    period = 'overall',
+    user1Service = 'lastfm',
+    user2Service = 'lastfm'
+  } = req.body;
 
   if (!user1 || !user2) {
     return res.status(400).json({
-      error: 'Both user1 and user2 usernames are required'
+      error: 'Both user1 and user2 are required'
     });
   }
 
-  if (user1.toLowerCase() === user2.toLowerCase()) {
+  // Prevent comparing the same Spotify user with themselves
+  if (user1Service === 'spotify' && user2Service === 'spotify') {
     return res.status(400).json({
-      error: 'Please provide two different usernames'
+      error: 'Cannot compare the same Spotify user with themselves. Please use Last.fm for one of the users.',
+      code: 'SAME_SPOTIFY_USER'
     });
   }
 
   try {
-    console.log(`Starting Redis-enhanced comparison for ${user1} vs ${user2} (${period})`);
+    console.log(`Starting comparison for ${user1} (${user1Service}) vs ${user2} (${user2Service}) (${period})`);
     const startTime = Date.now();
 
-    // Use Redis-enhanced cached comparison function
-    const comparisonResults = await getCachedComparison(user1, user2, period);
+    // Get session for Spotify access token if needed
+    const session = await getSessionFromRequest(req);
+    console.log('Session data in compare API:', {
+      username: session?.username,
+      spotifyId: session?.spotifyId,
+      displayName: session?.displayName,
+      email: session?.email,
+      hasTokens: !!session?.tokens?.accessToken,
+      tokenPreview: session?.tokens?.accessToken?.substring(0, 20) + '...'
+    });
+    let accessToken = null;
+
+    // Check if Spotify authentication is needed
+    if (user1Service === 'spotify' || user2Service === 'spotify') {
+      if (!session || !session.tokens?.accessToken) {
+        return res.status(401).json({
+          error: 'Spotify authentication required for Spotify comparisons',
+          code: 'SPOTIFY_AUTH_REQUIRED'
+        });
+      }
+
+      // Check if token needs refresh
+      let currentSpotifyUserId = null;
+      try {
+        const refreshedTokens = await SpotifyDataAPI.refreshTokenIfNeeded(session.tokens);
+        accessToken = refreshedTokens.accessToken;
+        
+        // DEBUG: Verify whose account this token belongs to
+        const currentUserProfile = await SpotifyDataAPI.getUserInfo(accessToken);
+        currentSpotifyUserId = currentUserProfile?.id || null;
+        console.log('Current Spotify user profile from token:', {
+          id: currentUserProfile.id,
+          name: currentUserProfile.name,
+          realname: currentUserProfile.realname
+        });
+      } catch (error) {
+        return res.status(401).json({
+          error: 'Spotify token refresh failed. Please log in again.',
+          code: 'TOKEN_REFRESH_FAILED'
+        });
+      }
+
+      // For Spotify users, we'll get the actual username from the session
+      // The frontend should now send the actual username, but we keep this as fallback
+      if (user1Service === 'spotify' && (user1 === 'me' || !user1)) {
+        user1 = session.username || session.spotifyId || 'spotify_user';
+      }
+      if (user2Service === 'spotify' && (user2 === 'me' || !user2)) {
+        user2 = session.username || session.spotifyId || 'spotify_user';
+      }
+    }
+
+    // Use enhanced cached comparison function
+    const spotifyUserId = (typeof currentSpotifyUserId !== 'undefined' && currentSpotifyUserId) 
+      ? currentSpotifyUserId 
+      : (session?.spotifyId || session?.username || 'anonymous');
+    global.currentSession = session; // Set for the cached function to use
+    const comparisonResults = await getCachedComparison(
+      user1, user2, period, user1Service, user2Service, spotifyUserId
+    );
 
     const {
       user1Data,
@@ -202,40 +224,18 @@ export default async function handler(req, res) {
       metadata
     } = comparisonResults;
 
-    // Prepare enhanced response
+    // Prepare response data
     const comparisonData = {
       users: {
-        user1: {
-          name: user1Data.userInfo.name,
-          realname: user1Data.userInfo.realname || '',
-          playcount: parseInt(user1Data.userInfo.playcount) || 0,
-          artistCount: parseInt(user1Data.userInfo.artist_count) || 0,
-          trackCount: parseInt(user1Data.userInfo.track_count) || 0,
-          url: user1Data.userInfo.url,
-          image: user1Data.userInfo.image?.[2]?.['#text'] || '',
-          topArtists: user1Data.topArtists.slice(0, 50), // Show more artists in UI
-          topTracks: user1Data.topTracks.slice(0, 50),
-          genres: user1Genres
-        },
-        user2: {
-          name: user2Data.userInfo.name,
-          realname: user2Data.userInfo.realname || '',
-          playcount: parseInt(user2Data.userInfo.playcount) || 0,
-          artistCount: parseInt(user2Data.userInfo.artist_count) || 0,
-          trackCount: parseInt(user2Data.userInfo.track_count) || 0,
-          url: user2Data.userInfo.url,
-          image: user2Data.userInfo.image?.[2]?.['#text'] || '',
-          topArtists: user2Data.topArtists.slice(0, 50),
-          topTracks: user2Data.topTracks.slice(0, 50),
-          genres: user2Genres
-        }
+        user1: formatUserData(user1Data, user1Genres, user1Service),
+        user2: formatUserData(user2Data, user2Genres, user2Service)
       },
       analysis: {
         period,
         compatibility,
         artistOverlap: {
           ...artistOverlap,
-          shared: artistOverlap.shared.slice(0, 50) // Show more shared items
+          shared: artistOverlap.shared.slice(0, 50)
         },
         trackOverlap: {
           ...trackOverlap,
@@ -246,21 +246,25 @@ export default async function handler(req, res) {
       },
       metadata: {
         comparedAt: new Date().toISOString(),
-        apiVersion: '1.4', // Bumped for Redis integration
+        apiVersion: '1.7', // Bumped to include correct Spotify /me usage and cache key fix
         processingTime: Date.now() - startTime,
-        redisEnabled: true,
-        enhancedGenres: true,
+        dataSource: metadata.dataSource,
+        mixedSources: metadata.mixedSources,
+        user1Service: metadata.user1Service,
+        user2Service: metadata.user2Service,
+        spotifyEnabled: true,
+        mixedComparison: true,
         ...metadata
       }
     };
 
-    console.log(`Redis-enhanced comparison completed in ${Date.now() - startTime}ms`);
+    console.log(`Mixed comparison completed in ${Date.now() - startTime}ms`);
     console.log(`Stats: ${artistOverlap.stats.totalUnique} total unique artists, ${user1Genres.length + user2Genres.length} total genres`);
 
     res.status(200).json(comparisonData);
 
   } catch (error) {
-    console.error('Redis-enhanced comparison error:', error);
+    console.error('Mixed comparison error:', error);
 
     if (error instanceof LastFMError) {
       if (error.code === 'NO_API_KEY') {
@@ -277,7 +281,7 @@ export default async function handler(req, res) {
       }
       if (error.code === 'USER_NOT_FOUND') {
         return res.status(404).json({
-          error: 'One or both users not found. Please check the usernames.',
+          error: 'Last.fm user not found. Please check the username.',
           code: error.code
         });
       }
@@ -287,8 +291,54 @@ export default async function handler(req, res) {
       });
     }
 
+    if (error instanceof SpotifyError) {
+      if (error.code === 'TOKEN_EXPIRED' || error.code === 'NO_TOKEN') {
+        return res.status(401).json({
+          error: 'Spotify authentication expired. Please log in again.',
+          code: error.code
+        });
+      }
+      if (error.code === 'USER_NOT_FOUND') {
+        return res.status(404).json({
+          error: 'Spotify user not found or profile is private.',
+          code: error.code
+        });
+      }
+      if (error.code === 'FORBIDDEN') {
+        return res.status(403).json({
+          error: 'Insufficient Spotify permissions. Please re-authorize.',
+          code: error.code
+        });
+      }
+      return res.status(error.status || 400).json({
+        error: error.message,
+        code: error.code
+      });
+    }
+
     res.status(500).json({
       error: 'Failed to fetch user data. Please try again.'
     });
   }
+}
+
+// Helper function to format user data consistently
+function formatUserData(userData, genres, service) {
+  return {
+    name: userData.userInfo.name,
+    realname: userData.userInfo.realname || '',
+    playcount: parseInt(userData.userInfo.playcount) || 0,
+    artistCount: parseInt(userData.userInfo.artistCount) || 0,
+    trackCount: parseInt(userData.userInfo.trackCount) || 0,
+    url: userData.userInfo.url,
+    image: userData.userInfo.image || '',
+    topArtists: userData.topArtists.slice(0, 50),
+    topTracks: userData.topTracks.slice(0, 50),
+    genres: genres,
+    dataSource: service,
+    // Service-specific fields
+    followers: userData.userInfo.followers || 0,
+    country: userData.userInfo.country || '',
+    product: userData.userInfo.product || ''
+  };
 }
