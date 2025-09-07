@@ -48,6 +48,10 @@ console.log('[NextAuth] NEXTAUTH_URL =', process.env.NEXTAUTH_URL)
 export default NextAuth({
   debug: true,
   trustHost: true,
+  pages: {
+    signIn: '/auth/signin',
+    error: '/auth/signin',
+  },
   providers: [
     SpotifyProvider({
       clientId: process.env.SPOTIFY_CLIENT_ID,

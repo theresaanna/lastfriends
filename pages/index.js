@@ -32,16 +32,17 @@ export default function HomePage() {
     }
 
     if (urlError) {
+      const detailedMessage = message ? decodeURIComponent(message) : '';
       const errorMessages = {
-        oauth_error: 'Spotify authentication failed. Please try again.',
+        oauth_error: detailedMessage || 'Spotify authentication failed. Please try again.',
         missing_code: 'Authentication code missing. Please try again.',
         session_expired: 'Authentication session expired. Please try again.',
         invalid_session: 'Invalid authentication session. Please try again.',
         state_mismatch: 'Security validation failed. Please try again.',
-        auth_failed: message ? decodeURIComponent(message) : 'Authentication failed. Please try again.'
+        auth_failed: detailedMessage || 'Authentication failed. Please try again.'
       };
 
-      setError(errorMessages[urlError] || 'An error occurred during authentication.');
+      setError(errorMessages[urlError] || detailedMessage || 'An error occurred during authentication.');
       router.replace('/', undefined, { shallow: true });
     }
   }, [router.query]);

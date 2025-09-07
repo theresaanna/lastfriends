@@ -130,7 +130,25 @@ export default function AuthHeader() {
               </div>
             ) : (
               <button
-                onClick={() => signIn('spotify')}
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/debug/canonical', { credentials: 'include', cache: 'no-store' });
+                    const data = await res.json();
+                    if (data?.mismatch && data?.nextAuthUrl) {
+                      console.warn('[HostCheck] Mismatch detected; redirecting to canonical origin before sign-in', data);
+                      const canonical = new URL(data.nextAuthUrl);
+                      const current = new URL(window.location.href);
+                      current.protocol = canonical.protocol;
+                      current.host = canonical.host;
+                      // Preserve path and query; replace history entry to avoid back/forward confusion
+                      window.location.replace(current.toString());
+                      return; // Stop here; navigation will occur
+                    }
+                  } catch (e) {
+                    console.warn('[HostCheck] Pre sign-in check failed', e?.message);
+                  }
+                  signIn('spotify');
+                }}
                 className="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center space-x-2"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">

@@ -9,5 +9,15 @@
       "path": "/api/workers/track-collector",
       "schedule": "*/2 * * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        { "type": "host", "value": "www.lastfriends.site" }
+      ],
+      "destination": "https://lastfriends.site/$1",
+      "permanent": true
+    }
   ]
 }
