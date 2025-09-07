@@ -1,6 +1,6 @@
 // utils/session.js - Unified session access (NextAuth secure-session or legacy JWT)
 import { SignJWT, jwtVerify } from 'jose';
-import { getSession as getSecureStoreSession } from '../lib/auth/session.js';
+import { SecureSessionManager } from '../lib/auth/nextauth-adapter.js';
 import { decryptToken } from '../lib/auth/encryption.js';
 
 const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || 'fallback-secret-key');
@@ -109,8 +109,8 @@ export async function getSessionFromRequest(req) {
     return null;
   }
 
-  // Load session from secure store
-  const secureSession = await getSecureStoreSession(secureToken);
+  // Load session from secure store via manager (handles auto-refresh when near expiry)
+  const secureSession = await SecureSessionManager.getSecureSession(secureToken);
   if (!secureSession) return null;
 
   // Decrypt tokens if possible; fall back to raw
