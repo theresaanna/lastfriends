@@ -9,8 +9,14 @@ export default function DebugAuth() {
   const [debugInfo, setDebugInfo] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [currentOrigin, setCurrentOrigin] = useState('');
 
   useEffect(() => {
+    // Set current origin only on client side
+    if (typeof window !== 'undefined') {
+      setCurrentOrigin(window.location.origin);
+    }
+    
     // Load providers and CSRF token
     async function loadAuthInfo() {
       try {
@@ -89,7 +95,7 @@ export default function DebugAuth() {
             <p><strong>Providers:</strong> {providers ? Object.keys(providers).join(', ') : 'Not loaded'}</p>
             <p><strong>NextAuth URL:</strong> {debugInfo.nextAuthUrl || 'Loading...'}</p>
             <p><strong>Expected Redirect URI:</strong> {debugInfo.expectedRedirectURI || 'Loading...'}</p>
-            <p><strong>Current Origin:</strong> {window.location.origin}</p>
+            <p><strong>Current Origin:</strong> {currentOrigin || 'Loading...'}</p>
           </div>
         </div>
 
