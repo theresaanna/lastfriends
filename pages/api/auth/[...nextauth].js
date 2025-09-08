@@ -81,8 +81,8 @@ console.log('[NextAuth] Cookie domain config:', {
   willSetDomain: !!COOKIE_DOMAIN
 });
 
-// Wrap NextAuth in error handling
-const authHandler = NextAuth({
+// Export authOptions for use in other API routes
+export const authOptions = {
   debug: process.env.NODE_ENV === 'development',
   // Remove trustHost as it can cause issues with URL validation
   pages: {
@@ -212,7 +212,10 @@ const authHandler = NextAuth({
       console.warn('[NextAuth][warn]', code)
     },
   },
-})
+}
+
+// Wrap NextAuth in error handling
+const authHandler = NextAuth(authOptions)
 
 // Export with error handling
 export default async function handler(req, res) {
