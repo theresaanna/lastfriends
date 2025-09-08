@@ -2,6 +2,7 @@
 import { getUserData as getLastFMUserData, getArtistInfo, LastFMError } from '../../utils/lastfm.js';
 import { SpotifyDataAPI, SpotifyError } from '../../utils/spotify.js';
 import { getSessionFromRequest } from '../../utils/session.js';
+import { getToken } from 'next-auth/jwt';
 import {
   calculateArtistOverlap,
   calculateTrackOverlap,
@@ -151,8 +152,33 @@ export default async function handler(req, res) {
     const startTime = Date.now();
 
     // Get session for Spotify access token if needed
-    const session = await getSessionFromRequest(req);
+    let session = await getSessionFromRequest(req);
+    
+    // If no secure session, try NextAuth session as fallback
+    let nextAuthToken = null;
+    if (!session || !session.tokens?.accessToken) {
+      console.log('No secure session found, checking NextAuth session...');
+      nextAuthToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      
+      if (nextAuthToken?.accessToken) {
+        console.log('Using NextAuth token for Spotify');
+        // Create a temporary session-like object from NextAuth token
+        session = {
+          dataSource: 'spotify',
+          username: nextAuthToken.email || nextAuthToken.name,
+          displayName: nextAuthToken.name,
+          email: nextAuthToken.email,
+          tokens: {
+            accessToken: nextAuthToken.accessToken,
+            refreshToken: nextAuthToken.refreshToken,
+            expiresAt: nextAuthToken.accessTokenExpires
+          }
+        };
+      }
+    }
+    
     console.log('Session data in compare API:', {
+      source: session ? (nextAuthToken ? 'nextauth' : 'secure-session') : 'none',
       username: session?.username,
       spotifyId: session?.spotifyId,
       displayName: session?.displayName,
