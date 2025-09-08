@@ -100,8 +100,10 @@ export default function HomePage() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('API Error Response:', errorData);
 
         if (errorData.code === 'SPOTIFY_AUTH_REQUIRED') {
+          console.error('Spotify auth required error - session not found in API');
           setError('Please connect your Spotify account first.');
           return;
         }

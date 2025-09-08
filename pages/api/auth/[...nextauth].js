@@ -172,7 +172,16 @@ const authHandler = NextAuth({
     },
     async session({ session, token }) {
       session.accessToken = token.accessToken
+      session.refreshToken = token.refreshToken
+      session.accessTokenExpires = token.accessTokenExpires
       session.error = token.error
+      // Debug logging
+      console.log('[NextAuth] Session callback:', {
+        hasAccessToken: !!token.accessToken,
+        hasRefreshToken: !!token.refreshToken,
+        tokenExpires: token.accessTokenExpires ? new Date(token.accessTokenExpires).toISOString() : null,
+        error: token.error
+      })
       return session
     },
   },

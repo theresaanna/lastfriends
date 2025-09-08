@@ -153,15 +153,28 @@ export default async function handler(req, res) {
 
     // Get session for Spotify access token if needed
     let session = await getSessionFromRequest(req);
+    console.log('[Compare API] Secure session check:', {
+      hasSession: !!session,
+      hasTokens: !!session?.tokens,
+      hasAccessToken: !!session?.tokens?.accessToken
+    });
     
     // If no secure session, try NextAuth session as fallback
     let nextAuthToken = null;
     if (!session || !session.tokens?.accessToken) {
-      console.log('No secure session found, checking NextAuth session...');
+      console.log('[Compare API] No secure session, checking NextAuth...');
       nextAuthToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      console.log('[Compare API] NextAuth token check:', {
+        hasToken: !!nextAuthToken,
+        hasAccessToken: !!nextAuthToken?.accessToken,
+        hasRefreshToken: !!nextAuthToken?.refreshToken,
+        tokenExpires: nextAuthToken?.accessTokenExpires,
+        email: nextAuthToken?.email,
+        name: nextAuthToken?.name
+      });
       
       if (nextAuthToken?.accessToken) {
-        console.log('Using NextAuth token for Spotify');
+        console.log('[Compare API] Using NextAuth token for Spotify');
         // Create a temporary session-like object from NextAuth token
         session = {
           dataSource: 'spotify',
@@ -174,6 +187,8 @@ export default async function handler(req, res) {
             expiresAt: nextAuthToken.accessTokenExpires
           }
         };
+      } else {
+        console.log('[Compare API] No NextAuth token available either');
       }
     }
     
