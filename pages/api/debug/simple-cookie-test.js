@@ -31,8 +31,24 @@ export default async function handler(req, res) {
     let jwtToken = null;
     let tokenError = null;
     try {
-      jwtToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      // First log what we're working with
+      console.log('Attempting to get token with secret:', process.env.NEXTAUTH_SECRET ? 'present' : 'missing');
+      console.log('Session token cookie:', cookies['next-auth.session-token'] ? 'present' : 'missing');
+      
+      jwtToken = await getToken({ 
+        req, 
+        secret: process.env.NEXTAUTH_SECRET,
+        cookieName: 'next-auth.session-token'
+      });
       console.log('JWT Token retrieved:', !!jwtToken);
+      if (jwtToken) {
+        console.log('Token contents:', {
+          email: jwtToken.email,
+          name: jwtToken.name,
+          hasAccessToken: !!jwtToken.accessToken,
+          hasRefreshToken: !!jwtToken.refreshToken
+        });
+      }
     } catch (error) {
       tokenError = error.message;
       console.error('Error getting JWT token:', error);
