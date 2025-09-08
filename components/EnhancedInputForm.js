@@ -244,39 +244,65 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
   };
 
   const handleSubmit = async () => {
+    console.log('Submit clicked with:', {
+      formData,
+      spotifyAuthStatus,
+      sessionStatus,
+      spotifyUserInfo,
+      validationStates
+    });
+    
     // Validate inputs based on service types
     let canSubmit = true;
+    let validationErrors = [];
 
     // Check User 1
     if (formData.user1Service === 'lastfm') {
-      canSubmit = canSubmit && validationStates.user1.status === 'success';
+      const isValid = validationStates.user1.status === 'success';
+      canSubmit = canSubmit && isValid;
+      if (!isValid) validationErrors.push('User 1 Last.fm validation failed');
     } else if (formData.user1Service === 'spotify') {
-      canSubmit = canSubmit && spotifyAuthStatus === 'authenticated';
+      // Use sessionStatus instead of spotifyAuthStatus for more reliable check
+      const isValid = sessionStatus === 'authenticated' && session;
+      canSubmit = canSubmit && isValid;
+      if (!isValid) validationErrors.push(`User 1 Spotify not authenticated (status: ${sessionStatus})`);
     }
 
     // Check User 2
     if (formData.user2Service === 'lastfm') {
-      canSubmit = canSubmit && validationStates.user2.status === 'success';
+      const isValid = validationStates.user2.status === 'success';
+      canSubmit = canSubmit && isValid;
+      if (!isValid) validationErrors.push('User 2 Last.fm validation failed');
     } else if (formData.user2Service === 'spotify') {
-      canSubmit = canSubmit && spotifyAuthStatus === 'authenticated';
+      // Use sessionStatus instead of spotifyAuthStatus for more reliable check
+      const isValid = sessionStatus === 'authenticated' && session;
+      canSubmit = canSubmit && isValid;
+      if (!isValid) validationErrors.push(`User 2 Spotify not authenticated (status: ${sessionStatus})`);
     }
 
+    console.log('Validation result:', { canSubmit, validationErrors });
+
     if (!canSubmit) {
+      console.error('Cannot submit form:', validationErrors);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Prepare submission data - use actual usernames for both services
+      // Prepare submission data - use session email/name for Spotify users
+      const spotifyUsername = session?.user?.email || session?.user?.name || spotifyUserInfo?.username || 'spotify_user';
+      
       const submissionData = {
-        user1: formData.user1Service === 'spotify' ? spotifyUserInfo?.username || spotifyUserInfo?.spotifyId || 'spotify_user' : formData.user1,
-        user2: formData.user2Service === 'spotify' ? spotifyUserInfo?.username || spotifyUserInfo?.spotifyId || 'spotify_user' : formData.user2,
+        user1: formData.user1Service === 'spotify' ? spotifyUsername : formData.user1,
+        user2: formData.user2Service === 'spotify' ? spotifyUsername : formData.user2,
         user1Service: formData.user1Service,
         user2Service: formData.user2Service,
         period: formData.period,
         limit: formData.limit,
         dataSource: 'mixed'
       };
+      
+      console.log('Submitting with data:', submissionData);
 
       await onSubmit(submissionData);
     } finally {
@@ -307,12 +333,13 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
   };
 
   const canSubmitForm = () => {
+    // Use sessionStatus for Spotify validation instead of spotifyAuthStatus
     const user1Valid = formData.user1Service === 'spotify'
-      ? spotifyAuthStatus === 'authenticated'
+      ? (sessionStatus === 'authenticated' && session)
       : validationStates.user1.status === 'success';
 
     const user2Valid = formData.user2Service === 'spotify'
-      ? spotifyAuthStatus === 'authenticated'
+      ? (sessionStatus === 'authenticated' && session)
       : validationStates.user2.status === 'success';
 
     return user1Valid && user2Valid && !isSubmitting;
