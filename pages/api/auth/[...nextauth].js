@@ -54,8 +54,25 @@ console.log('[NextAuth] Initializing with:', {
 // Resolve cookie domain dynamically; do not force a production domain in development
 // Only set domain if it's a valid domain string (not empty, not just a dot)
 let COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN?.trim();
-if (COOKIE_DOMAIN === '' || COOKIE_DOMAIN === '.' || COOKIE_DOMAIN === 'undefined') {
-  COOKIE_DOMAIN = undefined;
+
+// If AUTH_COOKIE_DOMAIN is a URL, extract just the domain
+if (COOKIE_DOMAIN) {
+  // Check if it starts with http:// or https://
+  if (COOKIE_DOMAIN.startsWith('http://') || COOKIE_DOMAIN.startsWith('https://')) {
+    try {
+      const url = new URL(COOKIE_DOMAIN);
+      COOKIE_DOMAIN = url.hostname;
+      console.log('[NextAuth] Extracted domain from URL:', url.hostname);
+    } catch (e) {
+      console.error('[NextAuth] Invalid URL in AUTH_COOKIE_DOMAIN:', COOKIE_DOMAIN);
+      COOKIE_DOMAIN = undefined;
+    }
+  }
+  
+  // Clear invalid values
+  if (COOKIE_DOMAIN === '' || COOKIE_DOMAIN === '.' || COOKIE_DOMAIN === 'undefined') {
+    COOKIE_DOMAIN = undefined;
+  }
 }
 
 console.log('[NextAuth] Cookie domain config:', {
