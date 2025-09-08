@@ -3,6 +3,7 @@ import { getUserData as getLastFMUserData, getArtistInfo, LastFMError } from '..
 import { SpotifyDataAPI, SpotifyError } from '../../utils/spotify.js';
 import { getSessionFromRequest } from '../../utils/session.js';
 import { getToken } from 'next-auth/jwt';
+import cookie from 'cookie';
 import {
   calculateArtistOverlap,
   calculateTrackOverlap,
@@ -120,6 +121,18 @@ async function extractLastFMGenres(artists) {
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600');
+
+  // Parse cookies if not already parsed
+  if (!req.cookies && req.headers.cookie) {
+    req.cookies = cookie.parse(req.headers.cookie);
+  }
+  
+  // Debug: Log cookies received
+  console.log('[Compare API] Cookies received:', Object.keys(req.cookies || {}));
+  console.log('[Compare API] Headers:', {
+    cookie: req.headers.cookie?.substring(0, 100) + '...',
+    'content-type': req.headers['content-type']
+  });
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
