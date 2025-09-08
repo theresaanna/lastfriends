@@ -43,14 +43,21 @@ async function refreshAccessToken(token) {
 }
 
 // Debug log NEXTAUTH_URL used at runtime
-console.log('[NextAuth] NEXTAUTH_URL =', process.env.NEXTAUTH_URL)
+console.log('[NextAuth] Initializing with:', {
+  NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+  NODE_ENV: process.env.NODE_ENV,
+  hasSecret: !!process.env.NEXTAUTH_SECRET,
+  hasSpotifyId: !!process.env.SPOTIFY_CLIENT_ID,
+  hasSpotifySecret: !!process.env.SPOTIFY_CLIENT_SECRET,
+});
 
 // Resolve cookie domain dynamically; do not force a production domain in development
 const COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined;
 
-export default NextAuth({
-  debug: true,
-  trustHost: true,
+// Wrap NextAuth in error handling
+const authHandler = NextAuth({
+  debug: process.env.NODE_ENV === 'development',
+  // Remove trustHost as it can cause issues with URL validation
   pages: {
     signIn: '/auth/signin',
     error: '/auth/signin',
@@ -151,3 +158,28 @@ export default NextAuth({
     },
   },
 })
+
+// Export with error handling
+export default async function handler(req, res) {
+  try {
+    return await authHandler(req, res);
+  } catch (error) {
+    console.error('[NextAuth] Handler error:', error);
+    console.error('[NextAuth] Error stack:', error.stack);
+    
+    // Return a more informative error response
+    if (req.query.nextauth?.includes('csrf')) {
+      return res.status(500).json({ 
+        error: 'NextAuth initialization failed',
+        message: error.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // For other endpoints, return appropriate error
+    return res.status(500).json({ 
+      error: 'Authentication service error',
+      message: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+}
