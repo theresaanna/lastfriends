@@ -15,28 +15,27 @@ export default function HomePage() {
     const { login, source, user, error: urlError, message } = router.query;
 
     if (login === 'success' && source === 'spotify') {
-      // Finalize secure session and fetch display name for a personalized greeting
+      // Show success immediately
+      setSuccess(`Successfully connected to Spotify! Welcome back!`);
+      
+      // Clean up URL immediately
+      router.replace('/', undefined, { shallow: true });
+      
+      // Notify components that auth is ready
+      window.dispatchEvent(new Event('spotify-auth-ready'));
+      
+      // Create secure session in background (don't block UI)
       (async () => {
         let retries = 3;
-        let sessionCreated = false;
-        
-        // Retry secure session creation with exponential backoff
-        while (retries > 0 && !sessionCreated) {
+        while (retries > 0) {
           try {
-            // Wait a bit for NextAuth to establish session (exponential backoff)
             if (retries < 3) {
-              await new Promise(resolve => setTimeout(resolve, (4 - retries) * 500));
+              await new Promise(resolve => setTimeout(resolve, 500));
             }
-            
-            // Create/refresh secure session cookie from NextAuth
             const sessResp = await fetch('/api/auth/secure-session', { method: 'POST', credentials: 'include' });
             if (sessResp.ok) {
-              sessionCreated = true;
-            } else if (retries === 1) {
-              // Only show error on last retry
-              const details = await sessResp.json().catch(() => ({}));
-              console.warn('Secure session creation failed:', details);
-              // Don't show error to user if we can still get user info
+              console.log('Secure session created successfully');
+              break;
             }
           } catch (e) {
             console.warn('Session creation attempt failed:', e);
@@ -44,17 +43,17 @@ export default function HomePage() {
           retries--;
         }
         
+        // Try to get more user info and update the welcome message
         try {
           const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
-          const me = await res.json().catch(() => ({}));
-          const display = me.displayName || me.username || user || 'User';
-          setSuccess(`Successfully connected to Spotify! Welcome, ${display}.`);
-          // Notify children to re-check auth (race-safe)
-          window.dispatchEvent(new Event('spotify-auth-ready'));
+          if (res.ok) {
+            const me = await res.json();
+            if (me.displayName || me.username) {
+              setSuccess(`Successfully connected to Spotify! Welcome, ${me.displayName || me.username}.`);
+            }
+          }
         } catch (e) {
-          setSuccess(`Successfully connected to Spotify! Welcome, ${user || 'User'}.`);
-        } finally {
-          router.replace('/', undefined, { shallow: true });
+          // Keep the generic success message
         }
       })();
     }

@@ -1,8 +1,10 @@
 // components/EnhancedInputForm.js - Refactored for mixed comparisons
 import { useState, useEffect, useRef } from 'react';
-import { signIn } from 'next-auth/react';
+import { signIn, useSession } from 'next-auth/react';
 
 const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
+  const { data: session, status: sessionStatus } = useSession();
+  
   const [formData, setFormData] = useState({
     user1: '',
     user2: '',
@@ -23,39 +25,44 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
 
   const retryScheduledRef = useRef(false);
 
-  // Check Spotify authentication status on component mount and when app dispatches auth-ready
+  // Use NextAuth session for immediate auth status
   useEffect(() => {
-    checkSpotifyAuth();
+    if (sessionStatus === 'authenticated' && session) {
+      console.log('NextAuth session detected:', session.user);
+      setSpotifyAuthStatus('authenticated');
+      setSpotifyUserInfo({
+        displayName: session.user.name,
+        email: session.user.email,
+        images: session.user.image ? [session.user.image] : [],
+        authenticated: true,
+        dataSource: 'spotify'
+      });
+    } else if (sessionStatus === 'unauthenticated') {
+      setSpotifyAuthStatus('not_authenticated');
+      setSpotifyUserInfo(null);
+    } else if (sessionStatus === 'loading') {
+      setSpotifyAuthStatus('checking');
+    }
+  }, [session, sessionStatus]);
+  
+  // Also check the secure session for additional data
+  useEffect(() => {
+    if (sessionStatus === 'authenticated') {
+      checkSpotifyAuth();
+    }
 
     const handler = () => {
       console.log('Spotify auth ready event received');
-      checkSpotifyAuth();
+      if (sessionStatus === 'authenticated') {
+        checkSpotifyAuth();
+      }
     };
     window.addEventListener('spotify-auth-ready', handler);
     
-    // Also check on focus in case user comes back from OAuth
-    const handleFocus = () => {
-      checkSpotifyAuth();
-    };
-    window.addEventListener('focus', handleFocus);
-    
-    // Poll for auth status change for a short period after mount
-    const pollInterval = setInterval(() => {
-      checkSpotifyAuth(false);
-    }, 2000);
-    
-    // Stop polling after 10 seconds
-    const pollTimeout = setTimeout(() => {
-      clearInterval(pollInterval);
-    }, 10000);
-    
     return () => {
       window.removeEventListener('spotify-auth-ready', handler);
-      window.removeEventListener('focus', handleFocus);
-      clearInterval(pollInterval);
-      clearTimeout(pollTimeout);
     };
-  }, []);
+  }, [sessionStatus]);
 
   const checkSpotifyAuth = async (withRetry = true) => {
     try {
