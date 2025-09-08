@@ -52,7 +52,17 @@ console.log('[NextAuth] Initializing with:', {
 });
 
 // Resolve cookie domain dynamically; do not force a production domain in development
-const COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined;
+// Only set domain if it's a valid domain string (not empty, not just a dot)
+let COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN?.trim();
+if (COOKIE_DOMAIN === '' || COOKIE_DOMAIN === '.' || COOKIE_DOMAIN === 'undefined') {
+  COOKIE_DOMAIN = undefined;
+}
+
+console.log('[NextAuth] Cookie domain config:', {
+  raw: process.env.AUTH_COOKIE_DOMAIN,
+  processed: COOKIE_DOMAIN,
+  willSetDomain: !!COOKIE_DOMAIN
+});
 
 // Wrap NextAuth in error handling
 const authHandler = NextAuth({
@@ -62,8 +72,8 @@ const authHandler = NextAuth({
     signIn: '/auth/signin',
     error: '/auth/signin',
   },
-  // Ensure cookies are set consistently. Only set a domain if explicitly provided.
-  cookies: {
+  // Ensure cookies are set consistently. Only set a domain if explicitly provided and valid.
+  cookies: COOKIE_DOMAIN ? {
     sessionToken: {
       name: 'next-auth.session-token',
       options: {
@@ -71,7 +81,6 @@ const authHandler = NextAuth({
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         path: '/',
-        // Only set a cookie domain if AUTH_COOKIE_DOMAIN is provided
         domain: COOKIE_DOMAIN,
       },
     },
@@ -82,11 +91,31 @@ const authHandler = NextAuth({
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         path: '/',
-        // Only set a cookie domain if AUTH_COOKIE_DOMAIN is provided
         domain: COOKIE_DOMAIN,
       },
     },
-  },
+    callbackUrl: {
+      name: 'next-auth.callback-url',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        domain: COOKIE_DOMAIN,
+      },
+    },
+    pkceCodeVerifier: {
+      name: 'next-auth.pkce.code_verifier',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        domain: COOKIE_DOMAIN,
+        maxAge: 60 * 15 // 15 minutes
+      },
+    },
+  } : undefined, // Let NextAuth use defaults if no domain is specified
   providers: [
     SpotifyProvider({
       clientId: process.env.SPOTIFY_CLIENT_ID,

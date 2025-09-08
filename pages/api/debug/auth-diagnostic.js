@@ -16,6 +16,7 @@ export default async function handler(req, res) {
       SPOTIFY_CLIENT_ID: !!process.env.SPOTIFY_CLIENT_ID,
       SPOTIFY_CLIENT_SECRET: !!process.env.SPOTIFY_CLIENT_SECRET,
       AUTH_ENCRYPTION_KEY: !!process.env.AUTH_ENCRYPTION_KEY,
+      AUTH_COOKIE_DOMAIN: !!process.env.AUTH_COOKIE_DOMAIN,
     },
     
     // Check NEXTAUTH_URL format (not the actual value for security)
@@ -33,6 +34,16 @@ export default async function handler(req, res) {
       isSet: !!process.env.AUTH_ENCRYPTION_KEY,
       length: process.env.AUTH_ENCRYPTION_KEY?.length || 0,
       isHex: process.env.AUTH_ENCRYPTION_KEY ? /^[0-9a-fA-F]+$/.test(process.env.AUTH_ENCRYPTION_KEY) : false,
+    },
+    
+    // Check AUTH_COOKIE_DOMAIN (this might be the issue)
+    cookieDomainInfo: {
+      isSet: !!process.env.AUTH_COOKIE_DOMAIN,
+      value: process.env.AUTH_COOKIE_DOMAIN || null,
+      length: process.env.AUTH_COOKIE_DOMAIN?.length || 0,
+      isEmpty: process.env.AUTH_COOKIE_DOMAIN === '',
+      isJustDot: process.env.AUTH_COOKIE_DOMAIN === '.',
+      isUndefinedString: process.env.AUTH_COOKIE_DOMAIN === 'undefined',
     },
     
     // Request info
