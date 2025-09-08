@@ -1,5 +1,4 @@
 import { getToken } from "next-auth/jwt";
-import cookie from 'cookie';
 
 export default async function handler(req, res) {
   try {
@@ -10,7 +9,15 @@ export default async function handler(req, res) {
     console.log('Raw Cookie Header:', rawCookieHeader);
     
     // 2. Parse cookies manually
-    const cookies = req.headers.cookie ? cookie.parse(req.headers.cookie) : {};
+    const cookies = {};
+    if (req.headers.cookie) {
+      req.headers.cookie.split(';').forEach(c => {
+        const parts = c.trim().split('=');
+        if (parts.length === 2) {
+          cookies[parts[0]] = decodeURIComponent(parts[1]);
+        }
+      });
+    }
     const cookieNames = Object.keys(cookies);
     console.log('Cookie names:', cookieNames);
     
