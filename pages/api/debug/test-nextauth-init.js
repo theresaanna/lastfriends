@@ -1,6 +1,5 @@
 // pages/api/debug/test-nextauth-init.js
 // Test endpoint to check NextAuth initialization
-import { getCsrfToken, getProviders } from 'next-auth/react';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -16,25 +15,38 @@ export default async function handler(req, res) {
     },
   };
 
+  // Test direct CSRF endpoint call
   try {
-    // Try to get CSRF token (this is what's failing in your app)
-    const csrfToken = await getCsrfToken({ req });
-    result.csrfToken = csrfToken ? 'obtained' : 'null';
-    
-    // Try to get providers
-    const providers = await getProviders();
-    result.providers = providers ? Object.keys(providers) : [];
-    
-    result.success = true;
+    const csrfResponse = await fetch(`https://${req.headers.host}/api/auth/csrf`);
+    const csrfData = await csrfResponse.json();
+    result.csrfToken = csrfData.csrfToken ? 'obtained' : 'null';
+    result.csrfEndpoint = {
+      status: csrfResponse.status,
+      ok: csrfResponse.ok,
+      hasToken: !!csrfData.csrfToken
+    };
   } catch (error) {
-    result.success = false;
-    result.error = {
-      message: error.message,
-      name: error.name,
-      // Only in dev mode show stack
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    result.csrfEndpoint = {
+      error: error.message
     };
   }
+  
+  // Test providers endpoint
+  try {
+    const providersResponse = await fetch(`https://${req.headers.host}/api/auth/providers`);
+    const providersData = await providersResponse.json();
+    result.providers = providersData ? Object.keys(providersData) : [];
+    result.providersEndpoint = {
+      status: providersResponse.status,
+      ok: providersResponse.ok
+    };
+  } catch (error) {
+    result.providersEndpoint = {
+      error: error.message
+    };
+  }
+  
+  result.success = true;
   
   // Also test manual initialization
   try {
