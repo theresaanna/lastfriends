@@ -10,18 +10,6 @@
       "schedule": "*/2 * * * *"
     }
   ],
-  "redirects": [
-    {
-      "source": "/api/auth/signin",
-      "destination": "/auth/signin",
-      "permanent": false
-    },
-    {
-      "source": "/api/auth/error",
-      "destination": "/auth/signin",
-      "permanent": false
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",

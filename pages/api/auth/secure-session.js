@@ -1,7 +1,7 @@
 // pages/api/auth/secure-session.js - Create secure session cookie from NextAuth token
 import { getToken } from 'next-auth/jwt';
 import { SecureSessionManager } from '../../../lib/auth/nextauth-adapter.js';
-import { serialize } from 'cookie';
+import { serialize, parse } from 'cookie';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -13,7 +13,13 @@ export default async function handler(req, res) {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
     if (!token) {
-      return res.status(401).json({ error: 'Not authenticated with NextAuth' });
+      // Provide minimal debug context in development without leaking secrets
+      const devDebug = process.env.NODE_ENV !== 'production' ? {
+        cookiesPresent: Object.keys(parse(req.headers.cookie || '')),
+        hasNextAuthSecret: Boolean(process.env.NEXTAUTH_SECRET),
+        nextAuthUrl: process.env.NEXTAUTH_URL || null,
+      } : undefined;
+      return res.status(401).json({ error: 'Not authenticated with NextAuth', ...(devDebug ? { debug: devDebug } : {}) });
     }
 
     // Build session data from NextAuth token
