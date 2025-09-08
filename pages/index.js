@@ -17,14 +17,34 @@ export default function HomePage() {
     if (login === 'success' && source === 'spotify') {
       // Finalize secure session and fetch display name for a personalized greeting
       (async () => {
-        try {
-          // Create/refresh secure session cookie from NextAuth in case AuthHeader effect hasn't run yet
-          const sessResp = await fetch('/api/auth/secure-session', { method: 'POST', credentials: 'include' });
-          if (!sessResp.ok) {
-            const details = await sessResp.json().catch(() => ({}));
-            setError(details?.error ? `We couldn't finish connecting Spotify (${details.error}). Try refreshing.` : `We couldn't finish connecting Spotify. Try refreshing.`);
+        let retries = 3;
+        let sessionCreated = false;
+        
+        // Retry secure session creation with exponential backoff
+        while (retries > 0 && !sessionCreated) {
+          try {
+            // Wait a bit for NextAuth to establish session (exponential backoff)
+            if (retries < 3) {
+              await new Promise(resolve => setTimeout(resolve, (4 - retries) * 500));
+            }
+            
+            // Create/refresh secure session cookie from NextAuth
+            const sessResp = await fetch('/api/auth/secure-session', { method: 'POST', credentials: 'include' });
+            if (sessResp.ok) {
+              sessionCreated = true;
+            } else if (retries === 1) {
+              // Only show error on last retry
+              const details = await sessResp.json().catch(() => ({}));
+              console.warn('Secure session creation failed:', details);
+              // Don't show error to user if we can still get user info
+            }
+          } catch (e) {
+            console.warn('Session creation attempt failed:', e);
           }
-
+          retries--;
+        }
+        
+        try {
           const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
           const me = await res.json().catch(() => ({}));
           const display = me.displayName || me.username || user || 'User';

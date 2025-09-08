@@ -11,13 +11,29 @@ export default function AuthHeader() {
   // Create secure session after NextAuth login
   useEffect(() => {
     if (session && status === 'authenticated') {
-      // Create secure session in background
-      fetch('/api/auth/secure-session', {
-        method: 'POST',
-        credentials: 'include'
-      }).catch(error => {
-        console.log('Secure session creation failed:', error);
-      });
+      // Create secure session in background with retry
+      let retries = 3;
+      const attemptSessionCreation = async () => {
+        while (retries > 0) {
+          try {
+            const response = await fetch('/api/auth/secure-session', {
+              method: 'POST',
+              credentials: 'include'
+            });
+            if (response.ok) {
+              console.log('Secure session created successfully');
+              return;
+            }
+          } catch (error) {
+            console.log(`Secure session creation attempt ${4 - retries} failed:`, error);
+          }
+          retries--;
+          if (retries > 0) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      };
+      attemptSessionCreation();
     }
   }, [session, status]);
 
