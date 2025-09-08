@@ -14,8 +14,10 @@ export default function SiteFooter() {
           <p className="text-sm text-green-500 mt-1">
           Hire me, please: <a href="https://theresasumma.com" className="hover:underline">theresasumma.com</a>
         </p>
-        <p className="text-xs text-gray-400 mt-2">
+        <p className="text-xs text-gray-400 mt-2 space-x-3">
           <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
+          <span className="text-gray-300">|</span>
+          <Link href="/about-security" className="hover:underline">About Security</Link>
         </p>
       </div>
     </footer>
