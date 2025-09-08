@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
 import EnhancedInputForm from '../components/EnhancedInputForm';
+import InAppBrowserNotice from '../components/InAppBrowserNotice';
 
 export default function HomePage() {
   const [error, setError] = useState('');
@@ -124,6 +125,11 @@ export default function HomePage() {
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Compare music compatibility between Last.fm and Spotify users and discover musical connections
           </p>
+        </div>
+
+        {/* In-app browser notice */}
+        <div className="max-w-2xl mx-auto mb-6">
+          <InAppBrowserNotice />
         </div>
 
         {/* Status Messages */}

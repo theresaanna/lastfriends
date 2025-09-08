@@ -2,6 +2,7 @@
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import InAppBrowserNotice from './InAppBrowserNotice';
 
 export default function AuthHeader() {
   const { data: session, status } = useSession();
@@ -56,6 +57,7 @@ export default function AuthHeader() {
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="pt-2"><InAppBrowserNotice /></div>
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
             <Link href="/" className="text-xl font-semibold text-gray-900 hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 rounded">
