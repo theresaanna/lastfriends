@@ -27,25 +27,61 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
   useEffect(() => {
     checkSpotifyAuth();
 
-    const handler = () => checkSpotifyAuth();
+    const handler = () => {
+      console.log('Spotify auth ready event received');
+      checkSpotifyAuth();
+    };
     window.addEventListener('spotify-auth-ready', handler);
-    return () => window.removeEventListener('spotify-auth-ready', handler);
+    
+    // Also check on focus in case user comes back from OAuth
+    const handleFocus = () => {
+      checkSpotifyAuth();
+    };
+    window.addEventListener('focus', handleFocus);
+    
+    // Poll for auth status change for a short period after mount
+    const pollInterval = setInterval(() => {
+      checkSpotifyAuth(false);
+    }, 2000);
+    
+    // Stop polling after 10 seconds
+    const pollTimeout = setTimeout(() => {
+      clearInterval(pollInterval);
+    }, 10000);
+    
+    return () => {
+      window.removeEventListener('spotify-auth-ready', handler);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(pollInterval);
+      clearTimeout(pollTimeout);
+    };
   }, []);
 
   const checkSpotifyAuth = async (withRetry = true) => {
     try {
-      const response = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+      console.log('Checking Spotify auth status...');
+      const response = await fetch('/api/auth/me', { 
+        credentials: 'include', 
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        }
+      });
       const data = await response.json();
+      console.log('Auth check response:', data);
 
       if (data.authenticated && data.dataSource === 'spotify') {
+        console.log('Spotify authenticated:', data.displayName || data.username);
         setSpotifyAuthStatus('authenticated');
         setSpotifyUserInfo(data);
       } else {
+        console.log('Not authenticated with Spotify');
         setSpotifyAuthStatus('not_authenticated');
         // Race condition: secure session may be created milliseconds after mount
         if (withRetry && !retryScheduledRef.current) {
           retryScheduledRef.current = true;
           setTimeout(() => {
+            console.log('Retrying auth check...');
             checkSpotifyAuth(false);
           }, 800);
         }
