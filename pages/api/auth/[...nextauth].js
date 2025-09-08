@@ -52,6 +52,30 @@ export default NextAuth({
     signIn: '/auth/signin',
     error: '/auth/signin',
   },
+  // Ensure cookies are set for the apex domain so redirects between www/apex or
+  // in-app browsers don’t lose state. This helps avoid OAuthCallback/state errors.
+  cookies: {
+    sessionToken: {
+      name: 'next-auth.session-token',
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        domain: process.env.AUTH_COOKIE_DOMAIN || 'lastfriends.site',
+      },
+    },
+    csrfToken: {
+      name: 'next-auth.csrf-token',
+      options: {
+        httpOnly: false,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        domain: process.env.AUTH_COOKIE_DOMAIN || 'lastfriends.site',
+      },
+    },
+  },
   providers: [
     SpotifyProvider({
       clientId: process.env.SPOTIFY_CLIENT_ID,
