@@ -27,34 +27,40 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
 
   // Use NextAuth session for immediate auth status
   useEffect(() => {
+    console.log('Session status changed:', sessionStatus, session?.user);
+    
     if (sessionStatus === 'authenticated' && session) {
-      console.log('NextAuth session detected:', session.user);
+      console.log('User is authenticated with Spotify');
       setSpotifyAuthStatus('authenticated');
       setSpotifyUserInfo({
-        displayName: session.user.name,
-        email: session.user.email,
-        images: session.user.image ? [session.user.image] : [],
+        displayName: session.user?.name || 'Spotify User',
+        email: session.user?.email,
+        images: session.user?.image ? [{ url: session.user.image }] : [],
         authenticated: true,
-        dataSource: 'spotify'
+        dataSource: 'spotify',
+        username: session.user?.email || session.user?.name || 'spotify_user'
       });
     } else if (sessionStatus === 'unauthenticated') {
+      console.log('User is not authenticated');
       setSpotifyAuthStatus('not_authenticated');
       setSpotifyUserInfo(null);
     } else if (sessionStatus === 'loading') {
+      console.log('Session is loading...');
       setSpotifyAuthStatus('checking');
     }
   }, [session, sessionStatus]);
   
-  // Also check the secure session for additional data
+  // Try to get additional data from secure session if available
   useEffect(() => {
-    if (sessionStatus === 'authenticated') {
-      checkSpotifyAuth();
+    if (sessionStatus === 'authenticated' && session) {
+      // Only try to get additional data, don't change auth status
+      checkSpotifyAuth(false, true);
     }
 
     const handler = () => {
       console.log('Spotify auth ready event received');
       if (sessionStatus === 'authenticated') {
-        checkSpotifyAuth();
+        checkSpotifyAuth(false, true);
       }
     };
     window.addEventListener('spotify-auth-ready', handler);
@@ -62,11 +68,11 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
     return () => {
       window.removeEventListener('spotify-auth-ready', handler);
     };
-  }, [sessionStatus]);
+  }, [sessionStatus, session]);
 
-  const checkSpotifyAuth = async (withRetry = true) => {
+  const checkSpotifyAuth = async (withRetry = true, onlyUpdateData = false) => {
     try {
-      console.log('Checking Spotify auth status...');
+      console.log('Checking secure session for additional data...');
       const response = await fetch('/api/auth/me', { 
         credentials: 'include', 
         cache: 'no-store',
@@ -75,27 +81,36 @@ const EnhancedInputForm = ({ onSubmit, onPreviewUser }) => {
         }
       });
       const data = await response.json();
-      console.log('Auth check response:', data);
+      console.log('Secure session response:', data);
 
       if (data.authenticated && data.dataSource === 'spotify') {
-        console.log('Spotify authenticated:', data.displayName || data.username);
-        setSpotifyAuthStatus('authenticated');
-        setSpotifyUserInfo(data);
-      } else {
-        console.log('Not authenticated with Spotify');
-        setSpotifyAuthStatus('not_authenticated');
-        // Race condition: secure session may be created milliseconds after mount
+        console.log('Got additional Spotify data:', data.displayName || data.username);
+        // Only update the user info with additional data, don't change auth status
+        if (onlyUpdateData && spotifyAuthStatus === 'authenticated') {
+          setSpotifyUserInfo(prev => ({
+            ...prev,
+            ...data,
+            images: data.images || prev?.images || []
+          }));
+        } else if (!onlyUpdateData) {
+          // This path shouldn't be used anymore, but keep for backward compatibility
+          setSpotifyAuthStatus('authenticated');
+          setSpotifyUserInfo(data);
+        }
+      } else if (!onlyUpdateData) {
+        console.log('Secure session not available yet');
+        // Don't change auth status if we're only updating data
         if (withRetry && !retryScheduledRef.current) {
           retryScheduledRef.current = true;
           setTimeout(() => {
-            console.log('Retrying auth check...');
-            checkSpotifyAuth(false);
+            console.log('Retrying secure session check...');
+            checkSpotifyAuth(false, onlyUpdateData);
           }, 800);
         }
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
-      setSpotifyAuthStatus('not_authenticated');
+      console.error('Secure session check failed:', error);
+      // Don't change auth status on error if we're only updating data
     }
   };
 
@@ -563,25 +578,28 @@ const SpotifyUserDisplay = ({ authStatus, userInfo, onLogin }) => {
   }
 
   if (authStatus === 'authenticated' && userInfo) {
+    // Handle images array - could be array of objects or strings
+    const imageUrl = userInfo.images?.[0]?.url || userInfo.images?.[0] || null;
+    
     return (
       <div className="border border-green-300 rounded-lg p-4 bg-green-50">
         <div className="flex items-center space-x-3">
-          {userInfo.images?.[0] ? (
+          {imageUrl ? (
             <img
-              src={userInfo.images[0]}
+              src={imageUrl}
               alt={userInfo.displayName}
               className="w-12 h-12 rounded-full object-cover"
             />
           ) : (
             <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
               <span className="text-white font-semibold">
-                {(userInfo.displayName || userInfo.username || 'U').charAt(0).toUpperCase()}
+                {(userInfo.displayName || userInfo.username || userInfo.email || 'U').charAt(0).toUpperCase()}
               </span>
             </div>
           )}
           <div>
             <h3 className="font-semibold text-green-800">
-              {userInfo.displayName || userInfo.username}
+              {userInfo.displayName || userInfo.username || userInfo.email?.split('@')[0] || 'Spotify User'}
             </h3>
             <p className="text-sm text-green-600">
               Spotify • {userInfo.country || 'Connected'}
