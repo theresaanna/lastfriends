@@ -45,6 +45,9 @@ async function refreshAccessToken(token) {
 // Debug log NEXTAUTH_URL used at runtime
 console.log('[NextAuth] NEXTAUTH_URL =', process.env.NEXTAUTH_URL)
 
+// Resolve cookie domain dynamically; do not force a production domain in development
+const COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN?.trim() || undefined;
+
 export default NextAuth({
   debug: true,
   trustHost: true,
@@ -52,8 +55,7 @@ export default NextAuth({
     signIn: '/auth/signin',
     error: '/auth/signin',
   },
-  // Ensure cookies are set for the apex domain so redirects between www/apex or
-  // in-app browsers don’t lose state. This helps avoid OAuthCallback/state errors.
+  // Ensure cookies are set consistently. Only set a domain if explicitly provided.
   cookies: {
     sessionToken: {
       name: 'next-auth.session-token',
@@ -62,7 +64,8 @@ export default NextAuth({
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         path: '/',
-        domain: process.env.AUTH_COOKIE_DOMAIN || 'lastfriends.site',
+        // Only set a cookie domain if AUTH_COOKIE_DOMAIN is provided
+        domain: COOKIE_DOMAIN,
       },
     },
     csrfToken: {
@@ -72,7 +75,8 @@ export default NextAuth({
         sameSite: 'lax',
         secure: process.env.NODE_ENV === 'production',
         path: '/',
-        domain: process.env.AUTH_COOKIE_DOMAIN || 'lastfriends.site',
+        // Only set a cookie domain if AUTH_COOKIE_DOMAIN is provided
+        domain: COOKIE_DOMAIN,
       },
     },
   },

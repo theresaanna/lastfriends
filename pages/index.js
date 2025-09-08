@@ -15,9 +15,16 @@ export default function HomePage() {
     const { login, source, user, error: urlError, message } = router.query;
 
     if (login === 'success' && source === 'spotify') {
-      // Fetch display name from session for a personalized greeting
+      // Finalize secure session and fetch display name for a personalized greeting
       (async () => {
         try {
+          // Create/refresh secure session cookie from NextAuth in case AuthHeader effect hasn't run yet
+          const sessResp = await fetch('/api/auth/secure-session', { method: 'POST', credentials: 'include' });
+          if (!sessResp.ok) {
+            const details = await sessResp.json().catch(() => ({}));
+            setError(details?.error ? `We couldn't finish connecting Spotify (${details.error}). Try refreshing.` : `We couldn't finish connecting Spotify. Try refreshing.`);
+          }
+
           const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
           const me = await res.json().catch(() => ({}));
           const display = me.displayName || me.username || user || 'User';
