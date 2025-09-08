@@ -176,7 +176,12 @@ export default async function handler(req, res) {
     let nextAuthToken = null;
     if (!session || !session.tokens?.accessToken) {
       console.log('[Compare API] No secure session, checking NextAuth...');
-      nextAuthToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+      console.log('[Compare API] Looking for cookie:', req.headers.cookie?.includes('next-auth.session-token') ? 'found' : 'not found');
+      nextAuthToken = await getToken({ 
+        req, 
+        secret: process.env.NEXTAUTH_SECRET,
+        cookieName: 'next-auth.session-token'
+      });
       console.log('[Compare API] NextAuth token check:', {
         hasToken: !!nextAuthToken,
         hasAccessToken: !!nextAuthToken?.accessToken,
